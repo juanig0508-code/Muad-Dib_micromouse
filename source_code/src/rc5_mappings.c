@@ -1,6 +1,14 @@
 #include "rc5_mappings.h"
 
+#include "delay.h"
 #include "eeprom.h"
+#include "leds.h"
+#include "rc5.h"
+
+#define RC5_LEARN_TIMEOUT_MS 10000
+
+static const enum RC5_BUTTON rc5_learn_order[RC5_MAPPINGS_NUM_BUTTONS] = {
+    RC5_CH_MODE, RC5_CH_DOWN, RC5_CH_UP, RC5_PLAY_PAUSE};
 
 static uint32_t rc5_button_codes[RC5_MAPPINGS_NUM_BUTTONS];
 
@@ -55,4 +63,43 @@ void rc5_mappings_clear(void) {
   for (uint16_t i = 0; i < RC5_MAPPINGS_NUM_BUTTONS; i++) {
     rc5_button_codes[i] = 0;
   }
+}
+
+/**
+ * @brief Modo de aprendizaje: pide, uno por uno, que se presione en el
+ * control remoto el botón correspondiente a CH_MODE, CH_DOWN, CH_UP y
+ * PLAY_PAUSE, capturando su código y guardándolo en EEPROM al final.
+ *
+ * Los LEDs de información (0-3) indican qué botón se está esperando.
+ * Si no llega ningún código dentro de RC5_LEARN_TIMEOUT_MS se cancela
+ * sin guardar cambios.
+ */
+void rc5_mappings_learn(void) {
+  for (uint8_t i = 0; i < RC5_MAPPINGS_NUM_BUTTONS; i++) {
+    clear_info_leds();
+    set_info_led(i, true);
+
+    uint32_t start_count = rc5_get_code_count();
+    uint32_t start_ms = get_clock_ticks();
+
+    while (rc5_get_code_count() == start_count) {
+      if (get_clock_ticks() - start_ms > RC5_LEARN_TIMEOUT_MS) {
+        clear_info_leds();
+        blink_RGB_color(255, 0, 0, 200);
+        return;
+      }
+    }
+
+    rc5_mappings_set(rc5_learn_order[i], rc5_get_last_code());
+
+    blink_RGB_color(0, 255, 0, 150);
+    delay(300);
+  }
+
+  rc5_mappings_save_eeprom();
+
+  clear_info_leds();
+  blink_RGB_color(0, 255, 0, 200);
+  delay(150);
+  blink_RGB_color(0, 255, 0, 200);
 }
