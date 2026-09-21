@@ -340,9 +340,73 @@ bool right_wall_detection(void) {
   return sensors_distance[SENSOR_SIDE_RIGHT_WALL_ID] < SENSOR_SIDE_DETECTION;
 }
 
+/*
+ * ============================================================
+ * DETECCION FRONTAL
+ * ============================================================
+ *
+ * front_wall_detection():
+ *   Se conserva para las rutinas que trabajan con la distancia
+ *   convertida (alineacion, control frontal, etc.).
+ *
+ * front_wall_navigation_detection():
+ *   Se usa especificamente para decidir la navegacion del
+ *   laberinto. Ademas de la distancia convertida, mira el RAW
+ *   de los dos sensores frontales.
+ *
+ * En las mediciones reales del robot obtuvimos aproximadamente:
+ *
+ *                    FL raw     FR raw
+ *   frente despejado    31         65
+ *   pared ~1 celda     114        193
+ *
+ * Por eso elegimos umbrales intermedios, algo desplazados hacia
+ * abajo para detectar la pared antes:
+ *
+ *   FL >= 70
+ *   FR >= 120
+ *
+ * Si luego hace falsas detecciones, estos son los dos valores
+ * que hay que subir ligeramente.
+ */
+#define SENSOR_FRONT_LEFT_NAV_RAW_DETECTION  180U
+#define SENSOR_FRONT_RIGHT_NAV_RAW_DETECTION 280U
+
 bool front_wall_detection(void) {
   return (sensors_distance[SENSOR_FRONT_LEFT_WALL_ID] < SENSOR_FRONT_DETECTION) ||
          (sensors_distance[SENSOR_FRONT_RIGHT_WALL_ID] < SENSOR_FRONT_DETECTION);
+}
+
+/*
+ * Deteccion frontal robusta para HANDWALL.
+ *
+ * Basta con que:
+ *   - la conversion de distancia detecte pared, O
+ *   - cualquiera de los dos sensores RAW detecte reflexion
+ *     suficiente.
+ *
+ * De esta forma un error de la conversion raw->mm no hace que
+ * el robot crea que tiene el frente libre y avance contra una
+ * pared.
+ */
+static bool front_wall_navigation_detection(void) {
+  uint16_t front_left_raw =
+      get_sensor_raw_filter(SENSOR_FRONT_LEFT_WALL_ID);
+
+  uint16_t front_right_raw =
+      get_sensor_raw_filter(SENSOR_FRONT_RIGHT_WALL_ID);
+
+  /*
+   * IMPORTANTE:
+   * Para NAVEGACION no usamos la distancia convertida.
+   * En nuestras pruebas la conversion raw->mm tuvo valores
+   * saturados/invalidos y cambiar los thresholds RAW no alteraba
+   * el comportamiento porque front_wall_detection() seguia
+   * entrando por el otro lado del OR.
+   */
+  return
+      (front_left_raw >= SENSOR_FRONT_LEFT_NAV_RAW_DETECTION) ||
+      (front_right_raw >= SENSOR_FRONT_RIGHT_NAV_RAW_DETECTION);
 }
 
 /**
@@ -473,6 +537,38 @@ uint16_t get_front_wall_distance(void) {
   return (sensors_distance[SENSOR_FRONT_LEFT_WALL_ID] + sensors_distance[SENSOR_FRONT_RIGHT_WALL_ID]) / 2;
 }
 
+
+/*
+ * ============================================================
+ * DETECCION LATERAL PARA NAVEGACION (RAW)
+ * ============================================================
+ *
+ * Mediciones reales:
+ *
+ *                     IZQ raw     DER raw
+ *   pared, centrado      301-334     508-545
+ *   pared, desplazado       367          367
+ *   lateral despejado       135          230
+ *
+ * Hay una separacion suficientemente clara para usar el RAW
+ * filtrado al decidir si existe una apertura.
+ *
+ * Estos thresholds NO controlan el centrado del robot.
+ * Solo sirven para get_walls()/Handwall.
+ */
+#define SENSOR_SIDE_LEFT_NAV_RAW_WALL_DETECTION   220U
+#define SENSOR_SIDE_RIGHT_NAV_RAW_WALL_DETECTION  300U
+
+static bool left_wall_navigation_detection(void) {
+  return get_sensor_raw_filter(SENSOR_SIDE_LEFT_WALL_ID) >=
+         SENSOR_SIDE_LEFT_NAV_RAW_WALL_DETECTION;
+}
+
+static bool right_wall_navigation_detection(void) {
+  return get_sensor_raw_filter(SENSOR_SIDE_RIGHT_WALL_ID) >=
+         SENSOR_SIDE_RIGHT_NAV_RAW_WALL_DETECTION;
+}
+
 struct walls get_walls(void) {
   struct walls walls;
 
@@ -483,9 +579,17 @@ struct walls get_walls(void) {
   return walls;
 #endif
 
-  walls.front = front_wall_detection();
-  walls.left = left_wall_detection();
-  walls.right = right_wall_detection();
+  /*
+   * Para NAVEGACION usamos solamente los RAW filtrados.
+   *
+   * Esto separa dos cosas:
+   *   - navegacion: detectar pared/apertura de forma robusta
+   *   - control: usar las distancias convertidas para seguir
+   *     suavemente la pared elegida
+   */
+  walls.front = front_wall_navigation_detection();
+  walls.left = left_wall_navigation_detection();
+  walls.right = right_wall_navigation_detection();
   return walls;
 }
 

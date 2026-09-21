@@ -76,7 +76,7 @@ static void debug_encoders(void) {
 
 static void debug_gyro(void) {
   if (get_clock_ticks() > last_print_debug + 50) {
-    printf("raw: %.2f\tangle: %.2f\tangular_speed: %.2f\n", lsm6dsr_get_gyro_z_raw(), lsm6dsr_get_gyro_z_degrees(), lsm6dsr_get_gyro_z_radps());
+    printf("raw: %.2f\tangle: %.2f\tangular_speed: %.2f\n", mpu6500_get_gyro_z_raw(), mpu6500_get_gyro_z_degrees(), mpu6500_get_gyro_z_radps());
     last_print_debug = get_clock_ticks();
   }
 }

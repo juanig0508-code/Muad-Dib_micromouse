@@ -22,7 +22,7 @@ void calibrate_from_config(uint8_t type) {
     delay(2000);
     switch (type) {
       case CALIBRATE_GYRO_Z:
-        lsm6dsr_gyro_z_calibration();
+        mpu6500_gyro_z_calibration();
         break;
       case CALIBRATE_SIDE_SENSORS_OFFSET:
         side_sensors_calibration(false);

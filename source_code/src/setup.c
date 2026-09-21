@@ -1,6 +1,33 @@
 #include <setup.h>
-
+#include "mpu6500.h"
 static enum RC5_TRIGGER rc5_trigger = RC5_TRIGGER_FALLING;
+
+
+
+static const struct rcc_clock_scale rcc_hse_24mhz_168mhz = {
+    .pllm = 24,
+    .plln = 336,
+    .pllp = 2,
+    .pllq = 7,
+    .pllr = 0,
+
+    .pll_source = RCC_CFGR_PLLSRC_HSE_CLK,
+
+    .hpre = RCC_CFGR_HPRE_NODIV,
+    .ppre1 = RCC_CFGR_PPRE_DIV4,
+    .ppre2 = RCC_CFGR_PPRE_DIV2,
+
+    .voltage_scale = PWR_SCALE1,
+
+    .flash_config =
+        FLASH_ACR_DCEN |
+        FLASH_ACR_ICEN |
+        FLASH_ACR_LATENCY_5WS,
+
+    .ahb_frequency = 168000000,
+    .apb1_frequency = 42000000,
+    .apb2_frequency = 84000000,
+};
 
 /**
  * @brief Configura los relojes principales del robot
@@ -15,36 +42,41 @@ static enum RC5_TRIGGER rc5_trigger = RC5_TRIGGER_FALLING;
  * DWT
  *
  */
-static void setup_clock(void) {
+static void setup_clock(void)
+{
+    /*
+     * Cristal físico de la placa: 24 MHz.
+     * SYSCLK resultante: 168 MHz.
+     */
+    rcc_clock_setup_pll(
+        &rcc_hse_24mhz_168mhz
+    );
 
-  rcc_clock_setup_pll(&rcc_hse_8mhz_3v3[RCC_CLOCK_3V3_168MHZ]);
+    rcc_periph_clock_enable(RCC_GPIOA);
+    rcc_periph_clock_enable(RCC_GPIOB);
+    rcc_periph_clock_enable(RCC_GPIOC);
+    rcc_periph_clock_enable(RCC_GPIOD);
 
-  rcc_periph_clock_enable(RCC_GPIOA);
-  rcc_periph_clock_enable(RCC_GPIOB);
-  rcc_periph_clock_enable(RCC_GPIOC);
+    rcc_periph_clock_enable(RCC_SYSCFG);
 
-  rcc_periph_clock_enable(RCC_SYSCFG);
+    rcc_periph_clock_enable(RCC_USART3);
+    rcc_periph_clock_enable(RCC_SPI3);
 
-  rcc_periph_clock_enable(RCC_USART3);
+    rcc_periph_clock_enable(RCC_TIM1);
+    rcc_periph_clock_enable(RCC_TIM2);
+    rcc_periph_clock_enable(RCC_TIM3);
+    rcc_periph_clock_enable(RCC_TIM4);
+    rcc_periph_clock_enable(RCC_TIM5);
+    rcc_periph_clock_enable(RCC_TIM8);
 
-  rcc_periph_clock_enable(RCC_SPI3);
+    rcc_periph_clock_enable(RCC_DMA1);
+    rcc_periph_clock_enable(RCC_DMA2);
 
-  rcc_periph_clock_enable(RCC_TIM1);
-  rcc_periph_clock_enable(RCC_TIM2);
-  rcc_periph_clock_enable(RCC_TIM3);
-  rcc_periph_clock_enable(RCC_TIM4);
-  rcc_periph_clock_enable(RCC_TIM5);
-  rcc_periph_clock_enable(RCC_TIM8);
+    rcc_periph_clock_enable(RCC_ADC1);
+    rcc_periph_clock_enable(RCC_ADC2);
 
-  rcc_periph_clock_enable(RCC_DMA1);
-  rcc_periph_clock_enable(RCC_DMA2);
-
-  rcc_periph_clock_enable(RCC_ADC1);
-  rcc_periph_clock_enable(RCC_ADC2);
-
-  dwt_enable_cycle_counter();
+    dwt_enable_cycle_counter();
 }
-
 /**
  * @brief Configura el SysTick para 1ms
  *
@@ -178,6 +210,8 @@ void exti15_10_isr(void) {
  *
  */
 static void setup_adc2(void) {
+
+  adc_set_clk_prescale(ADC_CCR_ADCPRE_BY4);
 
   adc_power_off(ADC2);
   adc_enable_scan_mode(ADC2);
@@ -401,7 +435,8 @@ static void setup_quadrature_encoders(void) {
  * Reference: https://github.com/Bulebots/meiga
  */
 static void setup_spi(uint8_t speed_div) {
-  spi_reset(SPI3);
+  rcc_periph_reset_pulse(RST_SPI3);
+  //spi_reset(SPI3);
 
   spi_init_master(SPI3, speed_div, SPI_CR1_CPOL_CLK_TO_0_WHEN_IDLE,
                   SPI_CR1_CPHA_CLK_TRANSITION_1, SPI_CR1_DFF_8BIT, SPI_CR1_MSBFIRST);
@@ -414,7 +449,7 @@ static void setup_spi(uint8_t speed_div) {
 
 static void setup_mpu(void) {
   setup_spi_high_speed();
-  lsm6dsr_init();
+  mpu6500_init();
 }
 
 /**

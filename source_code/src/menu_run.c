@@ -23,135 +23,218 @@ uint32_t lastBlinkMs = 0;
 bool blinkState = false;
 
 #ifndef MMSIM_ENABLED
-static void handle_menu_run_values(void) {
-  if (get_clock_ticks() - lastBlinkMs >= 125) {
-    lastBlinkMs = get_clock_ticks();
-    blinkState = !blinkState;
-  }
-  if (modeRun == MODE_SPEED) {
-    set_RGB_color(0, 0, 0);
+/* ============================================================
+ * REEMPLAZO DE handle_menu_run_values() - SIN RGB
+ * ============================================================
+ *
+ * Pegar esta funcion en menu_run.c reemplazando la original
+ * (la que va desde "static void handle_menu_run_values(void) {"
+ * hasta su llave de cierre, justo antes de
+ * handle_menu_run_btn).
+ *
+ *
+ * POR QUE HACE FALTA
+ *
+ * El menu original usa el LED RGB para dos cosas:
+ *
+ *   1. Identificar la pantalla de CARRERA (rojo).
+ *   2. Mostrar QUE VALOR esta elegido en las pantallas que
+ *      tienen tres opciones (tipo de exploracion, tipo de
+ *      floodfill, algoritmo).
+ *
+ * Sin RGB, esas dos cosas se pierden: no hay forma de saber si
+ * estas en la pantalla de carrera, ni cual de las tres opciones
+ * elegiste.
+ *
+ * El resto de la informacion ya la dan los LEDs A-E, que no
+ * cambia.
+ *
+ *
+ * LA REGLA NUEVA
+ *
+ *   FILA DE ARRIBA (1-5) -> QUE VALOR esta elegido
+ *   FILA DE ABAJO  (A-E) -> EN QUE PANTALLA estas
+ *
+ * En cualquier pantalla que no sea la de velocidad, la fila de
+ * arriba muestra el valor actual como una cuenta: 1 LED = valor
+ * 0, 2 LEDs = valor 1, 3 LEDs = valor 2. Parpadeando.
+ *
+ * Compromiso: en esas pantallas se deja de ver la velocidad
+ * elegida. Es a proposito, porque una sola regla clara se lee
+ * mucho mejor que dos superpuestas. La velocidad se consulta
+ * volviendo a la primera pantalla.
+ *
+ *
+ * PANTALLA DE CARRERA
+ *
+ * Se marca con LOS DIEZ LEDS a la vez, que es un patron que no
+ * usa ninguna otra pantalla:
+ *
+ *   parpadeando -> desarmado
+ *   fijos       -> ARMADO, listo para tapar un sensor
+ *
+ * El LED de estado se deja como estaba: indica si se borra el
+ * laberinto al empezar a explorar.
+ *
+ *
+ * RESUMEN PARA USAR EL MENU
+ *
+ *   1. velocidad          fila arriba parpadea, fila abajo apagada
+ *   2. CARRERA            los diez leds
+ *   3. tipo exploracion   LED A parpadea
+ *   4. tipo floodfill     LED B parpadea
+ *   5. tipo laberinto     LED C parpadea
+ *   6. estrategia         LED D parpadea
+ *   7. algoritmo          LED E parpadea
+ */
 
-    if (valueRun[MODE_SPEED] == MODE_SPEED_VALUES - 1) {
-      set_info_led(INFO_LED_1, blinkState);
-      set_info_led(INFO_LED_2, blinkState);
-      set_info_led(INFO_LED_3, blinkState);
-      set_info_led(INFO_LED_4, blinkState);
-      set_info_led(INFO_LED_5, blinkState);
-    } else {
-      for (uint8_t i = 0; i < MODE_SPEED_VALUES - 1; i++) {
-        if ((valueRun[MODE_SPEED] == i && blinkState)) {
-          set_info_led(i, true);
-        } else {
-          set_info_led(i, false);
-        }
-      }
-    }
-  } else {
-    if (valueRun[MODE_SPEED] == MODE_SPEED_VALUES - 1) {
-      set_info_led(INFO_LED_1, true);
-      set_info_led(INFO_LED_2, true);
-      set_info_led(INFO_LED_3, true);
-      set_info_led(INFO_LED_4, true);
-      set_info_led(INFO_LED_5, true);
-    } else {
-      for (uint8_t i = 0; i < MODE_SPEED_VALUES - 1; i++) {
-        set_info_led(i, i == valueRun[MODE_SPEED]);
-      }
-    }
-  }
+#ifndef MMSIM_ENABLED
 
-  if (modeRun == MODE_RACE) {
-    if (valueRun[modeRun] == 1) {
-      set_RGB_color(50, 0, 0);
-    } else {
-      if (blinkState) {
-        set_RGB_color(50, 0, 0);
-      } else {
-        set_RGB_color(0, 0, 0);
-      }
-    }
-    set_status_led(floodfill_is_reset_maze_on_start_explore());
-  } else {
-    set_status_led(false);
-  }
+/*
+ * @brief Enciende los primeros n LEDs de la fila de arriba.
+ *
+ * Se usa para mostrar el valor seleccionado como una cuenta.
+ */
+static void show_count_row1(uint8_t count, bool state)
+{
+    static const uint8_t row1[5] = {
+        INFO_LED_1, INFO_LED_2, INFO_LED_3, INFO_LED_4, INFO_LED_5
+    };
 
-  if (modeRun == MODE_EXPLORE_TYPE) {
-    switch (valueRun[modeRun]) {
-      case EXPLORE_SIMPLE:
-        set_RGB_color(0, 0, 50);
-        break;
-      case EXPLORE_HOME:
-        set_RGB_color(50, 50, 0);
-        break;
-      case EXPLORE_COMPLETE:
-        set_RGB_color(50, 0, 50);
-        break;
+    for (uint8_t i = 0; i < 5; i++) {
+        set_info_led(row1[i], (i < count) ? state : false);
     }
-    set_info_led(INFO_LED_A, blinkState);
-  } else {
-    set_info_led(INFO_LED_A, valueRun[MODE_EXPLORE_TYPE] != EXPLORE_SIMPLE);
-  }
-
-  if (modeRun == MODE_FLOODFILL_TYPE) {
-    switch (valueRun[modeRun]) {
-      case FLOODFILL_TYPE_BASIC:
-        set_RGB_color(0, 0, 50);
-        break;
-      case FLOODFILL_TYPE_DIAGONAL:
-        set_RGB_color(50, 50, 0);
-        break;
-      case FLOODFILL_TYPE_TIME:
-        set_RGB_color(50, 0, 50);
-        break;
-    }
-    set_info_led(INFO_LED_B, blinkState);
-  } else {
-    set_info_led(INFO_LED_B, valueRun[MODE_FLOODFILL_TYPE] != FLOODFILL_TYPE_BASIC);
-  }
-
-  if (modeRun == MODE_MAZE_TYPE) {
-    if (valueRun[modeRun] == 1) {
-      set_RGB_color(0, 50, 0);
-    } else {
-      set_RGB_color(0, 0, 0);
-    }
-    set_info_led(INFO_LED_C, blinkState);
-  } else {
-    set_info_led(INFO_LED_C, valueRun[MODE_MAZE_TYPE] == 1);
-  }
-
-  if (modeRun == MODE_SOLVE_STRATEGY) {
-    if (valueRun[modeRun] == 1) {
-      set_RGB_color(0, 50, 0);
-    } else {
-      set_RGB_color(0, 0, 0);
-    }
-    set_info_led(INFO_LED_D, blinkState);
-  } else {
-    set_info_led(INFO_LED_D, valueRun[MODE_SOLVE_STRATEGY] == 1);
-  }
-
-  if (modeRun == MODE_EXPLORE_ALGORITHM) {
-    switch (valueRun[modeRun]) {
-      case EXPLORE_HANDWALL:
-        set_RGB_color(0, 0, 50);
-        break;
-      case EXPLORE_TIME_TRIAL:
-        set_RGB_color(50, 50, 0);
-        break;
-      case EXPLORE_FLOODFILL:
-        set_RGB_color(50, 0, 50);
-        break;
-      default:
-        set_RGB_color(0, 0, 0);
-        break;
-    }
-    set_info_led(INFO_LED_E, blinkState);
-  } else {
-    set_info_led(INFO_LED_E, valueRun[MODE_EXPLORE_ALGORITHM] == EXPLORE_FLOODFILL);
-  }
 }
 
+
+static void clear_row2(void)
+{
+    set_info_led(INFO_LED_A, false);
+    set_info_led(INFO_LED_B, false);
+    set_info_led(INFO_LED_C, false);
+    set_info_led(INFO_LED_D, false);
+    set_info_led(INFO_LED_E, false);
+}
+
+
+static void set_row2_all(bool state)
+{
+    set_info_led(INFO_LED_A, state);
+    set_info_led(INFO_LED_B, state);
+    set_info_led(INFO_LED_C, state);
+    set_info_led(INFO_LED_D, state);
+    set_info_led(INFO_LED_E, state);
+}
+
+
+static void handle_menu_run_values(void)
+{
+    if (get_clock_ticks() - lastBlinkMs >= 125) {
+        lastBlinkMs = get_clock_ticks();
+        blinkState = !blinkState;
+    }
+
+    /*
+     * El RGB se apaga siempre: en esta placa no esta montado.
+     * Si en algun momento se conecta, se puede volver a la
+     * version original.
+     */
+    set_RGB_color(0, 0, 0);
+
+
+    /* ========================================================
+     * 1 - VELOCIDAD
+     * ========================================================
+     *
+     * Igual que el original: parpadea el LED de la velocidad
+     * elegida, o los cinco juntos si es HAKI.
+     */
+    if (modeRun == MODE_SPEED) {
+
+        clear_row2();
+        set_status_led(false);
+
+        if (valueRun[MODE_SPEED] == MODE_SPEED_VALUES - 1) {
+            show_count_row1(5, blinkState);
+        } else {
+            show_count_row1(0, false);
+            set_info_led((uint8_t)valueRun[MODE_SPEED], blinkState);
+        }
+
+        return;
+    }
+
+
+    /* ========================================================
+     * 2 - CARRERA
+     * ========================================================
+     *
+     * Los diez LEDs a la vez. Ninguna otra pantalla hace esto,
+     * asi que no se puede confundir.
+     *
+     *   parpadeando -> desarmado
+     *   fijos       -> armado
+     */
+    if (modeRun == MODE_RACE) {
+
+        bool armed = (valueRun[MODE_RACE] == 1);
+
+        show_count_row1(5, armed ? true : blinkState);
+        set_row2_all(armed ? true : blinkState);
+
+        /*
+         * Sin cambios: indica si se borra el laberinto al
+         * empezar la exploracion.
+         */
+        set_status_led(floodfill_is_reset_maze_on_start_explore());
+
+        return;
+    }
+
+
+    /* ========================================================
+     * 3 a 7 - EL RESTO
+     * ========================================================
+     *
+     * Fila de arriba: el valor, como cuenta de LEDs.
+     * Fila de abajo: cual pantalla, con su LED parpadeando.
+     */
+    set_status_led(false);
+    clear_row2();
+
+    uint8_t value = (uint8_t)valueRun[modeRun];
+
+    show_count_row1(value + 1, blinkState);
+
+    switch (modeRun) {
+
+        case MODE_EXPLORE_TYPE:
+            set_info_led(INFO_LED_A, blinkState);
+            break;
+
+        case MODE_FLOODFILL_TYPE:
+            set_info_led(INFO_LED_B, blinkState);
+            break;
+
+        case MODE_MAZE_TYPE:
+            set_info_led(INFO_LED_C, blinkState);
+            break;
+
+        case MODE_SOLVE_STRATEGY:
+            set_info_led(INFO_LED_D, blinkState);
+            break;
+
+        case MODE_EXPLORE_ALGORITHM:
+            set_info_led(INFO_LED_E, blinkState);
+            break;
+
+        default:
+            modeRun = MODE_SPEED;
+            break;
+    }
+}
+
+#endif
 static void handle_menu_run_btn(void) {
   if (get_menu_up_btn()) {
     while (get_menu_up_btn()) {

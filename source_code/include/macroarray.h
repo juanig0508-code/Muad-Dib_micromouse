@@ -5,8 +5,8 @@
 #include <stdio.h>
 
 #include "delay.h"
-#include "lsm6dsr.h"
-
+//#include "mpu6500.h"
+#include "mpu6500.h"
 #define MACROARRAY_LENGTH 30000
 #define MACROARRAY_SEPARATOR "\t"
 

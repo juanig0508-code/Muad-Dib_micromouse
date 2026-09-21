@@ -55,8 +55,10 @@ bool menu_run_handler(void);
 void menu_run_reset(void);
 
 void menu_run_load_values(void);
+void menu_run_save_values(void);
 
 bool menu_run_can_start(void);
+bool menu_run_use_left_hand(void);
 
 void menu_run_mode_change(void);
 void menu_run_up(void);

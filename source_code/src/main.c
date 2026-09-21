@@ -6,14 +6,13 @@
 #include <floodfill.h>
 #include <handwall.h>
 #include <leds.h>
-#include <lsm6dsr.h>
 #include <macroarray.h>
 #include <menu.h>
 #include <motors.h>
 #include <move.h>
 #include <timetrial.h>
 
-// #include <mpu6500.h>
+#include <mpu6500.h>
 #include <rc5.h>
 #include <sensors.h>
 #include <setup.h>
@@ -26,7 +25,7 @@ void sys_tick_handler(void) {
   update_battery_voltage();
   check_leds_while();
   check_buttons();
-  lsm6dsr_update();
+  mpu6500_update();
 }
 
 int main(void) {
