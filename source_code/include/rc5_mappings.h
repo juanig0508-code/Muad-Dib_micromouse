@@ -21,5 +21,6 @@ void rc5_mappings_set(enum RC5_BUTTON button, uint32_t code);
 uint32_t rc5_mappings_get(enum RC5_BUTTON button);
 bool rc5_mappings_match(uint32_t code, enum RC5_BUTTON *button);
 void rc5_mappings_clear(void);
+void rc5_mappings_learn(void);
 
 #endif
