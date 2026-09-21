@@ -62,6 +62,7 @@ static uint8_t state = STATE_MID1;
 static uint16_t cmd = 1;
 static uint8_t bits = 1;
 static uint32_t last_us = 0;
+static uint32_t last_code = 0;
 
 static void rc5_manage_command(uint16_t message) {
   // unsigned char toggle = (message & TOGGLE_MASK) >> TOGGLE_SHIFT;
@@ -149,8 +150,15 @@ void rc5_register(enum RC5_TRIGGER trigger) {
   last_us = us;
 
   if (bits == 14) {
+    last_code = cmd;
     rc5_manage_command(cmd);
     cmd = 0;
     bits = 0;
   }
+}
+
+uint32_t rc5_get_last_code(void) {
+  uint32_t code = last_code;
+  last_code = 0;
+  return code;
 }
