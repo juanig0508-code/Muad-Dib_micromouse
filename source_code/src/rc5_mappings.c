@@ -65,14 +65,25 @@ void rc5_mappings_clear(void) {
   }
 }
 
+static void blink_status_led(uint8_t times, uint32_t on_ms, uint32_t off_ms) {
+  for (uint8_t i = 0; i < times; i++) {
+    set_status_led(true);
+    delay(on_ms);
+    set_status_led(false);
+    delay(off_ms);
+  }
+}
+
 /**
  * @brief Modo de aprendizaje: pide, uno por uno, que se presione en el
  * control remoto el botón correspondiente a CH_MODE, CH_DOWN, CH_UP y
  * PLAY_PAUSE, capturando su código y guardándolo en EEPROM al final.
  *
  * Los LEDs de información (0-3) indican qué botón se está esperando.
- * Si no llega ningún código dentro de RC5_LEARN_TIMEOUT_MS se cancela
- * sin guardar cambios.
+ * El LED de estado da la confirmación: un parpadeo corto por cada
+ * botón capturado, tres parpadeos largos al terminar con éxito, y
+ * parpadeos rápidos si se cancela por no recibir ninguna señal dentro
+ * de RC5_LEARN_TIMEOUT_MS (en ese caso no se guarda nada).
  */
 void rc5_mappings_learn(void) {
   for (uint8_t i = 0; i < RC5_MAPPINGS_NUM_BUTTONS; i++) {
@@ -85,21 +96,19 @@ void rc5_mappings_learn(void) {
     while (rc5_get_code_count() == start_count) {
       if (get_clock_ticks() - start_ms > RC5_LEARN_TIMEOUT_MS) {
         clear_info_leds();
-        blink_RGB_color(255, 0, 0, 200);
+        blink_status_led(6, 80, 80);
         return;
       }
     }
 
     rc5_mappings_set(rc5_learn_order[i], rc5_get_last_code());
 
-    blink_RGB_color(0, 255, 0, 150);
+    blink_status_led(1, 150, 150);
     delay(300);
   }
 
   rc5_mappings_save_eeprom();
 
   clear_info_leds();
-  blink_RGB_color(0, 255, 0, 200);
-  delay(150);
-  blink_RGB_color(0, 255, 0, 200);
+  blink_status_led(3, 200, 200);
 }
