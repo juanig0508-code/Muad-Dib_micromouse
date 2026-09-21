@@ -19,6 +19,19 @@
 #include <stdint.h>
 #endif
 
+/*
+ * Pared elegida como referencia para el control de recta.
+ *
+ * La navegacion (handwall) selecciona LEFT o RIGHT.
+ * Durante las rectas, el sensor de esa pared genera una
+ * velocidad angular pequeña que ejecuta el PID del MPU.
+ */
+enum wall_follow_side {
+  WALL_FOLLOW_NONE = 0,
+  WALL_FOLLOW_LEFT,
+  WALL_FOLLOW_RIGHT
+};
+
 bool is_race_started(void);
 void set_race_started(bool state);
 bool is_race_auto_run(void);
@@ -29,6 +42,18 @@ void set_control_debug(bool state);
 void set_linear_error_correction(bool enabled);
 void set_angular_error_correction(bool enabled);
 void set_side_sensors_correction(bool enabled);
+
+/* Seleccion de la pared que se va a seguir durante las rectas. */
+void set_wall_follow_side(enum wall_follow_side side);
+
+/*
+ * Heading lock con MPU.
+ */
+void reset_heading_reference(void);
+void add_target_heading(float radians);
+float get_measured_heading(void);
+float get_target_heading(void);
+
 void set_front_sensors_angle_correction(bool enabled);
 bool is_front_sensors_angle_correction_enabled(void);
 void set_front_sensors_distance_correction(bool enabled);

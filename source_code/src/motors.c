@@ -1,5 +1,14 @@
 #include <motors.h>
 
+/*
+ * Sentido lógico de cada motor.
+ *
+ * -1 invierte el sentido respecto del código original.
+ * +1 conserva el sentido original.
+ */
+#define LEFT_MOTOR_DIRECTION  (-1)
+#define RIGHT_MOTOR_DIRECTION (-1)
+
 static bool motors_pwm_saturated = false;
 static bool motors_angle_saturated = false;
 static uint32_t motors_saturated_ms = 0;
@@ -50,6 +59,9 @@ void set_motors_enable(bool enabled) {
 }
 
 void set_motors_speed(float velI, float velD) {
+
+  velI *= LEFT_MOTOR_DIRECTION;
+  velD *= RIGHT_MOTOR_DIRECTION;
   float ocI = 0;
   float ocD = 0;
 
@@ -81,6 +93,9 @@ void set_motors_brake(void) {
 }
 
 void set_motors_pwm(int32_t pwm_left, int32_t pwm_right) {
+
+  pwm_left *= LEFT_MOTOR_DIRECTION;
+  pwm_right *= RIGHT_MOTOR_DIRECTION;
   if (pwm_left > MOTORES_MAX_PWM) {
     pwm_left = MOTORES_MAX_PWM;
   } else if (pwm_left < -MOTORES_MAX_PWM) {

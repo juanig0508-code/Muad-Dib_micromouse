@@ -6,48 +6,91 @@
 #define RC5_BUTTON_DEBOUNCE_MS 50
 #define RC5_BUTTON_TIMEOUT_MS 200
 
+static uint32_t btn_analog = 0;
+
 static uint32_t btn_menu_up_ms = 0;
 static uint32_t btn_menu_down_ms = 0;
 static uint32_t btn_menu_mode_ms = 0;
+
+static uint32_t btn_ir_menu_up_ms = 0;
+static uint32_t btn_ir_menu_down_ms = 0;
+static uint32_t btn_ir_menu_mode_ms = 0;
 static uint32_t btn_play_pause_ms = 0;
 
-static uint32_t btn_last_seen_ms[RC5_MAPPINGS_NUM_BUTTONS] = {0};
+static uint32_t rc5_last_code_count = 0;
+static uint32_t btn_ir_last_seen_ms[RC5_MAPPINGS_NUM_BUTTONS] = {0};
 
 static bool debug_btn = false;
 
-static uint32_t *get_btn_ms(enum RC5_BUTTON button) {
+static uint32_t *get_ir_btn_ms(enum RC5_BUTTON button) {
   switch (button) {
     case RC5_CH_MODE:
-      return &btn_menu_mode_ms;
+      return &btn_ir_menu_mode_ms;
     case RC5_CH_DOWN:
-      return &btn_menu_down_ms;
+      return &btn_ir_menu_down_ms;
     case RC5_CH_UP:
-      return &btn_menu_up_ms;
+      return &btn_ir_menu_up_ms;
     case RC5_PLAY_PAUSE:
       return &btn_play_pause_ms;
   }
   return NULL;
 }
 
-void check_buttons(void) {
-  uint32_t now = get_clock_ticks();
-  uint32_t code = rc5_get_last_code();
-  enum RC5_BUTTON button;
+static void check_analog_buttons(void) {
+  btn_analog = get_aux_raw(AUX_MENU_BTN_ID);
 
-  if (code != 0 && rc5_mappings_match(code, &button)) {
-    btn_last_seen_ms[button] = now;
-    uint32_t *ms = get_btn_ms(button);
-    if (ms != NULL && *ms == 0) {
-      *ms = now;
+  if (btn_analog >= 1300 && btn_analog <= 1700) {
+    if (btn_menu_up_ms == 0) {
+      btn_menu_up_ms = get_clock_ticks();
+    }
+  } else {
+    btn_menu_up_ms = 0;
+  }
+  if (btn_analog >= 2300 && btn_analog <= 2700) {
+    if (btn_menu_mode_ms == 0) {
+      btn_menu_mode_ms = get_clock_ticks();
+    }
+  } else {
+    btn_menu_mode_ms = 0;
+  }
+  if (btn_analog >= 3700) {
+    if (btn_menu_down_ms == 0) {
+      btn_menu_down_ms = get_clock_ticks();
+    }
+  } else {
+    btn_menu_down_ms = 0;
+  }
+}
+
+static void check_ir_buttons(void) {
+  rc5_poll();
+
+  uint32_t now = get_clock_ticks();
+  uint32_t count = rc5_get_code_count();
+
+  if (count != rc5_last_code_count) {
+    rc5_last_code_count = count;
+    enum RC5_BUTTON button;
+    if (rc5_mappings_match(rc5_get_last_code(), &button)) {
+      btn_ir_last_seen_ms[button] = now;
+      uint32_t *ms = get_ir_btn_ms(button);
+      if (ms != NULL && *ms == 0) {
+        *ms = now;
+      }
     }
   }
 
   for (uint16_t i = 0; i < RC5_MAPPINGS_NUM_BUTTONS; i++) {
-    uint32_t *ms = get_btn_ms((enum RC5_BUTTON)i);
-    if (ms != NULL && *ms > 0 && now - btn_last_seen_ms[i] > RC5_BUTTON_TIMEOUT_MS) {
+    uint32_t *ms = get_ir_btn_ms((enum RC5_BUTTON)i);
+    if (ms != NULL && *ms > 0 && now - btn_ir_last_seen_ms[i] > RC5_BUTTON_TIMEOUT_MS) {
       *ms = 0;
     }
   }
+}
+
+void check_buttons(void) {
+  check_analog_buttons();
+  check_ir_buttons();
 }
 
 /**
@@ -56,7 +99,9 @@ void check_buttons(void) {
  * @return bool
  */
 bool get_menu_up_btn(void) {
-  return btn_menu_up_ms > 0 && get_clock_ticks() - btn_menu_up_ms > RC5_BUTTON_DEBOUNCE_MS;
+  bool analog = btn_menu_up_ms > 0 && get_clock_ticks() - btn_menu_up_ms > RC5_BUTTON_DEBOUNCE_MS;
+  bool ir = btn_ir_menu_up_ms > 0 && get_clock_ticks() - btn_ir_menu_up_ms > RC5_BUTTON_DEBOUNCE_MS;
+  return analog || ir;
 }
 
 /**
@@ -65,7 +110,9 @@ bool get_menu_up_btn(void) {
  * @return bool
  */
 bool get_menu_down_btn(void) {
-  return btn_menu_down_ms > 0 && get_clock_ticks() - btn_menu_down_ms > RC5_BUTTON_DEBOUNCE_MS;
+  bool analog = btn_menu_down_ms > 0 && get_clock_ticks() - btn_menu_down_ms > RC5_BUTTON_DEBOUNCE_MS;
+  bool ir = btn_ir_menu_down_ms > 0 && get_clock_ticks() - btn_ir_menu_down_ms > RC5_BUTTON_DEBOUNCE_MS;
+  return analog || ir;
 }
 
 /**
@@ -74,11 +121,13 @@ bool get_menu_down_btn(void) {
  * @return bool
  */
 bool get_menu_mode_btn(void) {
-  return btn_menu_mode_ms > 0 && get_clock_ticks() - btn_menu_mode_ms > RC5_BUTTON_DEBOUNCE_MS;
+  bool analog = btn_menu_mode_ms > 0 && get_clock_ticks() - btn_menu_mode_ms > RC5_BUTTON_DEBOUNCE_MS;
+  bool ir = btn_ir_menu_mode_ms > 0 && get_clock_ticks() - btn_ir_menu_mode_ms > RC5_BUTTON_DEBOUNCE_MS;
+  return analog || ir;
 }
 
 /**
- * @brief Obtiene el estado del botón Play/Pause
+ * @brief Obtiene el estado del botón Play/Pause (solo IR, sin equivalente analógico)
  *
  * @return bool
  */

@@ -30,7 +30,7 @@ void eeprom_load(void) {
     addr += 4;
   }
 
-  lsm6dsr_load_eeprom();
+  mpu6500_load_eeprom();
   sensors_load_eeprom();
   floodfill_load_maze();
   menu_run_load_values();

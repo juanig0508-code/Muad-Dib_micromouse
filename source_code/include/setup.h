@@ -14,7 +14,8 @@
 #include <libopencm3/stm32/usart.h>
 
 #include "config.h"
-#include "lsm6dsr.h"
+//#include "mpu6500.h"
+#include "mpu6500.h"
 #include "rc5.h"
 #include "sensors.h"
 #include "usart.h"

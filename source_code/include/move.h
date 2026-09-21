@@ -12,7 +12,8 @@
 #else
 #include "constants.h"
 #include "control.h"
-#include "lsm6dsr.h"
+//#include "mpu6500.h"
+#include "mpu6500.h"
 #include "menu_run.h"
 #include "mmsim_api.h"
 #include "sensors.h"

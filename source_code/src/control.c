@@ -31,6 +31,56 @@ static volatile float sum_angular_error;
 static volatile float last_angular_error;
 
 static volatile bool side_sensors_correction_enabled = false;
+
+/*
+ * ============================================================
+ * SEGUIDOR DE UNA SOLA PARED
+ * ============================================================
+ *
+ * Estos valores son deliberadamente faciles de ajustar.
+ *
+ * Los targets salen de las mediciones reales tomadas con el
+ * robot aproximadamente centrado:
+ *
+ *   sensor izquierdo ~141 mm
+ *   sensor derecho   ~137 mm
+ *
+ * El sensor lateral NO aplica voltaje directamente a motores.
+ * Genera una velocidad angular deseada pequeña y limitada.
+ * El PID angular + MPU se encarga de ejecutarla.
+ */
+#define WALL_FOLLOW_LEFT_TARGET_MM   130.0f
+#define WALL_FOLLOW_RIGHT_TARGET_MM  130.0f
+
+#define WALL_FOLLOW_KP_ANGULAR 0.04f
+#define WALL_FOLLOW_MAX_RADPS  0.20f
+
+
+#define WALL_FOLLOW_VALID_MAX_MM     190.0f
+
+static volatile enum wall_follow_side wall_follow_side = WALL_FOLLOW_NONE;
+
+/*
+ * ============================================================
+ * HEADING LOCK CON MPU
+ * ============================================================
+ *
+ * measured_heading_rad:
+ *   angulo integrado realmente recorrido por el robot.
+ *
+ * target_heading_rad:
+ *   orientacion cardinal que deberia tener el robot.
+ *
+ * Cada MOVE_LEFT/MOVE_RIGHT modifica target_heading_rad en 90°.
+ * Durante una recta, si el giro termino algunos grados corto o
+ * pasado, el MPU genera una correccion suave para recuperar el
+ * heading objetivo.
+ */
+#define HEADING_KP              2.0f
+#define HEADING_MAX_RADPS       0.25f
+
+static volatile float measured_heading_rad = 0.0f;
+static volatile float target_heading_rad = 0.0f;
 static volatile bool front_sensors_angle_correction_enabled = false;
 static volatile bool front_sensors_distance_correction_enabled = false;
 static volatile bool front_sensors_diagonal_correction_enabled = false;
@@ -111,12 +161,154 @@ static void update_fan_speed(void) {
   }
 }
 
-static float get_measured_linear_speed(void) {
-  return (get_encoder_left_speed() + get_encoder_right_speed()) / 2.0f;
+
+
+static float get_measured_linear_speed(void)
+{
+    return (
+        get_encoder_left_speed() +
+        get_encoder_right_speed()
+    ) / 2.0f;
+}
+static float get_measured_angular_speed(void)
+{
+    return -mpu6500_get_gyro_z_radps();
 }
 
-static float get_measured_angular_speed(void) {
-  return -lsm6dsr_get_gyro_z_radps();
+/*
+ * Lleva un angulo al intervalo [-PI, PI].
+ */
+static float wrap_heading_angle(float angle)
+{
+    while (angle > PI) {
+        angle -= 2.0f * PI;
+    }
+
+    while (angle < -PI) {
+        angle += 2.0f * PI;
+    }
+
+    return angle;
+}
+
+/*
+ * Integra la velocidad angular medida por el MPU.
+ * control_loop() corre a CONTROL_FREQUENCY_HZ.
+ */
+static void update_measured_heading(void)
+{
+    measured_heading_rad +=
+        get_measured_angular_speed() /
+        (float)CONTROL_FREQUENCY_HZ;
+
+    measured_heading_rad =
+        wrap_heading_angle(measured_heading_rad);
+}
+
+/*
+ * Correccion de heading durante rectas.
+ *
+ * Ejemplo:
+ *   target = 90°
+ *   measured = 87°
+ *   error = +3°
+ *
+ * Entonces solicita una pequeña velocidad angular positiva
+ * hasta volver a apuntar aproximadamente a 90°.
+ */
+static float get_heading_angular_correction(void)
+{
+    float error =
+        wrap_heading_angle(
+            target_heading_rad -
+            measured_heading_rad
+        );
+
+    float correction = HEADING_KP * error;
+
+    return constrain(
+        correction,
+        -HEADING_MAX_RADPS,
+        HEADING_MAX_RADPS
+    );
+}
+
+/*
+ * Devuelve una velocidad angular pequeña para volver a la
+ * distancia objetivo de la pared seleccionada.
+ *
+ * Convencion del firmware:
+ *   angular_speed > 0  -> giro a derecha
+ *   angular_speed < 0  -> giro a izquierda
+ */
+static float get_wall_follow_angular_speed(void)
+{
+    float distance;
+    float error;
+    float angular_speed;
+
+    if (wall_follow_side == WALL_FOLLOW_RIGHT) {
+
+        distance = get_sensor_distance(
+            SENSOR_SIDE_RIGHT_WALL_ID
+        );
+
+        /*
+         * Si la pared elegida esta demasiado lejos/no es
+         * confiable, no corregimos lateralmente. En ese caso
+         * el MPU mantiene ideal_angular_speed = 0.
+         */
+        if (distance >= WALL_FOLLOW_VALID_MAX_MM) {
+            return 0.0f;
+        }
+
+        /*
+         * Positivo = demasiado lejos de la pared derecha.
+         * Hay que girar suavemente a derecha.
+         */
+        error =
+            distance -
+            WALL_FOLLOW_RIGHT_TARGET_MM;
+
+        angular_speed =
+            WALL_FOLLOW_KP_ANGULAR * error;
+    }
+
+    else if (wall_follow_side == WALL_FOLLOW_LEFT) {
+
+        distance = get_sensor_distance(
+            SENSOR_SIDE_LEFT_WALL_ID
+        );
+
+        if (distance >= WALL_FOLLOW_VALID_MAX_MM) {
+            return 0.0f;
+        }
+
+        /*
+         * Positivo = demasiado lejos de la pared izquierda.
+         * Hay que girar suavemente a izquierda.
+         */
+        error =
+            distance -
+            WALL_FOLLOW_LEFT_TARGET_MM;
+
+        angular_speed =
+            -WALL_FOLLOW_KP_ANGULAR * error;
+    }
+
+    else {
+        return 0.0f;
+    }
+
+    /*
+     * Limite duro para impedir volantazos aunque una lectura
+     * sea mala o el robot quede muy desplazado.
+     */
+    return constrain(
+        angular_speed,
+        -WALL_FOLLOW_MAX_RADPS,
+        WALL_FOLLOW_MAX_RADPS
+    );
 }
 #endif
 
@@ -224,6 +416,42 @@ void set_angular_error_correction(bool enabled) {
 
 void set_side_sensors_correction(bool enabled) {
   side_sensors_correction_enabled = enabled;
+}
+
+void set_wall_follow_side(enum wall_follow_side side) {
+  wall_follow_side = side;
+}
+
+/*
+ * Pone la orientacion actual como 0°.
+ * Se llama al comenzar Handwall.
+ */
+void reset_heading_reference(void) {
+  measured_heading_rad = 0.0f;
+  target_heading_rad = 0.0f;
+}
+
+/*
+ * Modifica el heading objetivo cuando la navegacion ordena un
+ * giro.
+ *
+ * Derecha: +PI/2
+ * Izquierda: -PI/2
+ * 180°: +/-PI
+ */
+void add_target_heading(float radians) {
+  target_heading_rad =
+      wrap_heading_angle(
+          target_heading_rad + radians
+      );
+}
+
+float get_measured_heading(void) {
+  return measured_heading_rad;
+}
+
+float get_target_heading(void) {
+  return target_heading_rad;
 }
 
 void set_front_sensors_angle_correction(bool enabled) {
@@ -344,6 +572,7 @@ void control_loop(void) {
   if (is_debug_enabled() && !is_debug_use_control()) {
     return;
   }
+  /*
   if ((is_motor_pwm_saturated() || is_motor_angle_saturated()) && is_race_started()) {
     set_motors_speed(0, 0);
     set_fan_speed(0);
@@ -354,7 +583,7 @@ void control_loop(void) {
       set_race_started(false);
     }
     return;
-  }
+  }*/
   if (!is_race_started()) {
     if (race_finish_ms > 0 && get_clock_ticks() - race_finish_ms <= 3000) {
       set_motors_brake();
@@ -372,6 +601,12 @@ void control_loop(void) {
   update_fan_speed();
   set_fan_speed(ideal_fan_speed);
 
+  /*
+   * Actualizamos el angulo real continuamente, tambien mientras
+   * se ejecutan MOVE_LEFT/MOVE_RIGHT.
+   */
+  update_measured_heading();
+
   float linear_voltage = 0;
   float angular_voltage = 0;
 
@@ -387,7 +622,39 @@ void control_loop(void) {
 
   if (angular_error_correction_enabled) {
     last_angular_error = angular_error;
-    angular_error = ideal_angular_speed - get_measured_angular_speed();
+
+    /*
+     * Durante un giro MOVE_LEFT/MOVE_RIGHT, ideal_angular_speed
+     * contiene el perfil del giro y no agregamos correcciones.
+     *
+     * Durante una recta:
+     *
+     *   1) HEADING LOCK:
+     *      corrige los grados que hayan quedado mal del giro.
+     *
+     *   2) WALL FOLLOW:
+     *      sigue usando solamente la pared elegida para
+     *      recuperar la posicion lateral.
+     *
+     * Ambas correcciones estan limitadas para evitar volantazos.
+     */
+    float commanded_angular_speed = ideal_angular_speed;
+
+    if (fabsf(ideal_angular_speed) < 0.01f) {
+
+      commanded_angular_speed +=
+          get_heading_angular_correction();
+
+      if (side_sensors_correction_enabled) {
+        commanded_angular_speed +=
+            get_wall_follow_angular_speed();
+      }
+    }
+
+    angular_error =
+        commanded_angular_speed -
+        get_measured_angular_speed();
+
     sum_angular_error += angular_error;
   } else {
     angular_error = 0;
@@ -395,14 +662,18 @@ void control_loop(void) {
     last_angular_error = 0;
   }
 
-  if (side_sensors_correction_enabled) {
-    side_sensors_error = get_side_sensors_error();
-    sum_side_sensors_error += side_sensors_error;
-  } else {
-    side_sensors_error = 0;
-    sum_side_sensors_error = 0;
-    last_side_sensors_error = 0;
-  }
+  /*
+   * La correccion lateral vieja (get_side_sensors_error)
+   * mezclaba pared izquierda/derecha y aplicaba un PID lateral
+   * directo a los motores.
+   *
+   * En este modo ya no se usa. El seguimiento de pared se
+   * convierte arriba en una velocidad angular deseada para
+   * el PID del MPU.
+   */
+  side_sensors_error = 0;
+  sum_side_sensors_error = 0;
+  last_side_sensors_error = 0;
 
   if (front_sensors_angle_correction_enabled) {
     front_sensors_angle_error = get_front_sensors_angle_error();
@@ -444,10 +715,6 @@ void control_loop(void) {
       get_kinematics().kpi[KPI_ANGULAR].kp * angular_error +
       get_kinematics().kpi[KPI_ANGULAR].ki * sum_angular_error +
       get_kinematics().kpi[KPI_ANGULAR].kd * (angular_error - last_angular_error) +
-
-      get_kinematics().kpi[KPI_SIDE_SENSORS].kp * side_sensors_error +
-      get_kinematics().kpi[KPI_SIDE_SENSORS].ki * sum_side_sensors_error +
-      get_kinematics().kpi[KPI_SIDE_SENSORS].kd * (side_sensors_error - last_side_sensors_error) +
 
       get_kinematics().kpi[KPI_FRONT_ANGLE_SENSORS].kp * front_sensors_angle_error +
       get_kinematics().kpi[KPI_FRONT_ANGLE_SENSORS].ki * sum_front_sensors_angle_error +
@@ -496,7 +763,7 @@ void control_loop(void) {
         // (int16_t)(get_encoder_right_speed()),
         (int16_t)(ideal_angular_speed * 100),
         (int16_t)(get_measured_angular_speed() * 100),
-        (int16_t)(lsm6dsr_get_gyro_z_raw() * 100),
+        (int16_t)(mpu6500_get_gyro_z_raw() * 100),
         (int16_t)pwm_left,
         (int16_t)pwm_right,
         // (int16_t)get_encoder_avg_millimeters(),
@@ -533,7 +800,7 @@ void control_loop(void) {
     //     // (int16_t)(get_encoder_right_speed()),
     //     (int16_t)(ideal_angular_speed * 100),
     //     (int16_t)(get_measured_angular_speed() * 100),
-    //     (int16_t)(lsm6dsr_get_gyro_z_raw() * 100),
+    //     (int16_t)(mpu6500_get_gyro_z_raw() * 100),
     //     (int16_t)pwm_left,
     //     (int16_t)pwm_right,
     //     // (int16_t)get_encoder_avg_millimeters(),

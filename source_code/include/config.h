@@ -22,19 +22,44 @@ enum ROBOT_VERSION {
   ZOROBOT3_C = 3
 };
 
-/** Laberinto */
-#define CELL_DIMENSION 180
-#define CELL_DIAGONAL 127.3
-#define WALL_WIDTH 12
-#define MIDDLE_MAZE_DISTANCE ((CELL_DIMENSION - WALL_WIDTH) / 2.)
-#define SENSING_POINT_DISTANCE 0
-#define WALL_LOSS_TO_SENSING_POINT_DISTANCE 116
+/** Laberinto *//** Laberinto */
 
+/*
+ * 260 mm libres entre caras interiores
+ * + 12 mm de espesor de pared
+ * = 272 mm entre centros de paredes consecutivas.
+ */
+#define CELL_DIMENSION 260
+
+/*
+ * 272 / sqrt(2)
+ */
+#define CELL_DIAGONAL 183.84f
+
+#define WALL_WIDTH 12
+
+/*
+ * Distancia desde el centro del pasillo
+ * hasta la cara interior de una pared:
+ *
+ * (272 - 12) / 2 = 130 mm
+ */
+#define MIDDLE_MAZE_DISTANCE \
+    ((CELL_DIMENSION - WALL_WIDTH) / 2.0f)
+
+#define SENSING_POINT_DISTANCE 0
+
+/*
+ * Valor inicial estimado.
+ * Después debe ajustarse mediante pruebas.
+ */
+#define WALL_LOSS_TO_SENSING_POINT_DISTANCE 162
 /** Características Físicas */
 #define MICROMETERS_PER_TICK 10.494055
 #define ROBOT_FRONT_LENGTH 48.121
 #define ROBOT_BACK_LENGTH 40.706
 #define ROBOT_WIDTH 70.2
+
 #define WHEELS_SEPARATION 62
 #define ROBOT_MIDDLE_WIDTH ((ROBOT_WIDTH / 2.0))
 
@@ -47,12 +72,13 @@ enum ROBOT_VERSION {
 
 #define SENSOR_FRONT_CALIBRATION_READINGS 20
 #define SENSOR_SIDE_CALIBRATION_READINGS 100
-#define SENSOR_FRONT_DETECTION ((CELL_DIMENSION * 1.22))
-#define SENSOR_SIDE_DETECTION 115 //((CELL_DIMENSION * 0.7))
+#define SENSOR_FRONT_DETECTION ((CELL_DIMENSION * 0.8))
+#define SENSOR_SIDE_DETECTION ((CELL_DIMENSION * 0.7))
+#define SENSOR_SIDE_CORRECTION_MAX 75.0
 
 /** Control de inicio de competición */
 #define SENSOR_FRONT_DETECTION_START 100
-#define SENSOR_START_MIN_MS 350
+#define SENSOR_START_MIN_MS 150
 
 /** Divisor de Voltage */
 #define VOLT_DIV_FACTOR_3S 5.30

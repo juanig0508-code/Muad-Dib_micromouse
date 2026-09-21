@@ -42,8 +42,8 @@ static struct kpi_params kpi_explore[] = {
         .kd = 0.0,
     },
     [KPI_SIDE_SENSORS] = {
-        .kp = 0.03,
-        .ki = 0.002,
+        .kp = 0.003,
+        .ki = 0.0,
         .kd = 0.0,
     },
     [KPI_FRONT_ANGLE_SENSORS] = {
@@ -62,6 +62,7 @@ static struct kpi_params kpi_explore[] = {
         .ki = 0.040,
     },
 };
+
 
 static struct kpi_params kpi_run[] = {
     [KPI_LINEAR] = {
@@ -135,21 +136,22 @@ static struct inplace_params turns_inplace[] = {
 
 static struct turn_params turns_explore[] = {
     [MOVE_LEFT] = {
-        .start = 13.1633,
-        .end = 13.1571,
-        .linear_speed = 800,
-        .max_angular_speed = 14.5455,
-        .transition = 63.3480,
-        .arc = 5.7440,
+        .start = 20.37f,
+        .end = 20.36f,
+        .linear_speed = 600,
+        .max_angular_speed = 8.5f,
+        .transition = 75.04f,
+        .arc = 8.89f,
         .sign = -1,
     },
+
     [MOVE_RIGHT] = {
-        .start = 13.1633,
-        .end = 13.1571,
-        .linear_speed = 800,
-        .max_angular_speed = 14.5455,
-        .transition = 63.3480,
-        .arc = 5.7440,
+        .start = 20.37f,
+        .end = 20.36f,
+        .linear_speed = 600,
+        .max_angular_speed = 8.5f,
+        .transition = 75.04f,
+        .arc = 8.89f,
         .sign = 1,
     },
 };
@@ -799,7 +801,7 @@ static struct turn_params turns_haki[] = {
     },
 };
 
-#define SPEED_EXPLORE_LINEAR_SPEED 800
+#define SPEED_EXPLORE_LINEAR_SPEED 600
 #define SPEED_EXPLORE_LINEAR_SPEED_RUN 3500
 
 static struct kinematics kinematics_settings[] = {
@@ -811,7 +813,7 @@ static struct kinematics kinematics_settings[] = {
             .speed_hard = 0,
             .accel_soft = 0,
         },
-        .fan_speed = 40,
+        .fan_speed = 0,
         .turns = turns_explore,
         .kpi = kpi_explore,
         .mpu = {
@@ -1037,24 +1039,50 @@ static void move_end(void) {
  * @brief Movimiento frontal relativo a la celda actual; avanza a la siguiente celda
  *
  */
-static void move_front(void) {
+static void move_front(void)
+{
 #ifdef MMSIM_ENABLED
-  API_moveForward();
+
+    API_moveForward();
+
 #else
 
-  set_front_sensors_angle_correction(false);
-  set_front_sensors_diagonal_correction(false);
-  struct walls initial_walls = get_walls();
-  if (initial_walls.left || initial_walls.right) {
-    set_side_sensors_correction(true);
-  } else {
-    set_side_sensors_correction(false);
-  }
-  move_straight(CELL_DIMENSION - SENSING_POINT_DISTANCE - current_cell_start_mm, kinematics.linear_speed, true, false);
-  enter_next_cell();
+    set_front_sensors_angle_correction(false);
+    set_front_sensors_diagonal_correction(false);
+
+    struct walls initial_walls = get_walls();
+
+    /*
+     * Corrección lateral normal:
+     * si hay pared a alguno de los lados,
+     * el robot intenta mantenerse centrado.
+     */
+    if (initial_walls.left || initial_walls.right) {
+        set_side_sensors_correction(true);
+    } else {
+        set_side_sensors_correction(false);
+    }
+
+    /*
+     * Avanzar hasta la siguiente celda.
+     */
+    move_straight(
+        CELL_DIMENSION
+            - SENSING_POINT_DISTANCE
+            - current_cell_start_mm,
+        kinematics.linear_speed,
+        true,
+        false
+    );
+
+    /*
+     * IMPORTANTE:
+     * actualizar la referencia de celda.
+     */
+    enter_next_cell();
+
 #endif
 }
-
 static void move_side(enum movement movement) {
 #ifdef MMSIM_ENABLED
   switch (movement) {
@@ -1126,7 +1154,7 @@ static void move_side(enum movement movement) {
   }
 
   disable_sensors_correction();
-  // reset_control_errors(); //! Esto se había puesto por un problema en la acumulación de error según aumenta el número de giros realizados
+  reset_control_errors(); //! Esto se había puesto por un problema en la acumulación de error según aumenta el número de giros realizados
   move_arc_turn(kinematics.turns[movement]);
 
   set_front_sensors_angle_correction(false);
@@ -1161,82 +1189,286 @@ static void move_side(enum movement movement) {
 
 #endif
 }
-
 static void move_back(enum movement movement) {
 #ifdef MMSIM_ENABLED
   API_turnRight();
   API_turnRight();
+
   if (movement != MOVE_BACK_STOP) {
     API_moveForward();
   }
+
 #else
 
   struct walls initial_walls = get_walls();
+
+  /*
+   * ========================================================
+   * CALLEJON SIN SALIDA
+   * ========================================================
+   *
+   * MOVE_BACK_WALL se utiliza cuando handwall detecta:
+   *
+   *      pared izquierda
+   *      pared frontal
+   *      pared derecha
+   *
+   * En vez de:
+   *
+   *      avanzar hacia la pared
+   *      giro 90
+   *      acomodarse
+   *      giro 90
+   *
+   * hacemos directamente un giro de 180 grados en el lugar.
+   */
+
+  if (
+      movement == MOVE_BACK_WALL &&
+      initial_walls.front &&
+      initial_walls.left &&
+      initial_walls.right
+  ) {
+
+    /*
+     * Detener completamente el movimiento lineal.
+     */
+    set_target_linear_speed(0);
+    set_ideal_angular_speed(0);
+
+    /*
+     * No queremos que los sensores intenten corregir
+     * la trayectoria mientras estamos girando.
+     */
+    disable_sensors_correction();
+
+    /*
+     * Limpiar cualquier error acumulado de la recta anterior.
+     */
+    reset_control_errors();
+
+    /*
+     * Pequeña pausa para que el robot llegue prácticamente
+     * detenido al comienzo del giro.
+     */
+    delay(100);
+
+    /*
+     * Giro único de 180 grados.
+     *
+     * MOVE_BACK_WALL ya tiene radians = PI.
+     */
+    move_inplace_turn(MOVE_BACK_WALL);
+
+    /*
+     * Dejar nuevamente velocidad angular objetivo en cero.
+     */
+    set_ideal_angular_speed(0);
+
+    reset_control_errors();
+
+    /*
+     * Volvemos a habilitar la corrección lateral para
+     * salir rectos del callejón.
+     */
+    set_front_sensors_angle_correction(false);
+    set_front_sensors_diagonal_correction(false);
+    set_side_sensors_correction(true);
+
+    /*
+     * Hemos cambiado 180 grados, por lo que avanzamos
+     * hacia la celda de la que veníamos.
+     */
+    move_straight(
+        CELL_DIMENSION
+            - SENSING_POINT_DISTANCE
+            - current_cell_start_mm,
+        kinematics.linear_speed,
+        true,
+        false
+    );
+
+    enter_next_cell();
+
+    return;
+  }
+
+
+  /*
+   * ========================================================
+   * COMPORTAMIENTO ORIGINAL PARA LOS OTROS MOVE_BACK
+   * ========================================================
+   */
+
   if (initial_walls.front) {
-    // Para decelerar de velocidad de mapeo
-    move_straight(10, 300, false, false);
+
+    move_straight(
+        10,
+        300,
+        false,
+        false
+    );
+
     current_cell_start_mm += 10;
+
     set_side_sensors_correction(false);
     set_front_sensors_angle_correction(true);
   }
+
 
   set_front_sensors_angle_correction(false);
   set_front_sensors_diagonal_correction(false);
   set_side_sensors_correction(true);
 
+
   if (initial_walls.front) {
+
     set_front_sensors_angle_correction(true);
     set_side_sensors_correction(false);
-    move_straight(MIDDLE_MAZE_DISTANCE, 300, false, true);
-    keep_front_distance(MIDDLE_MAZE_DISTANCE, 150);
+
+    move_straight(
+        MIDDLE_MAZE_DISTANCE,
+        300,
+        false,
+        true
+    );
+
+    keep_front_distance(
+        MIDDLE_MAZE_DISTANCE,
+        150
+    );
+
 
     if (initial_walls.left) {
-      move_inplace_turn(MOVE_LEFT_INPLACE);
-      keep_front_distance(MIDDLE_MAZE_DISTANCE, 150);
-      move_inplace_turn(MOVE_LEFT_INPLACE);
-    } else if (initial_walls.right) {
-      move_inplace_turn(MOVE_RIGHT_INPLACE);
-      keep_front_distance(MIDDLE_MAZE_DISTANCE, 150);
-      move_inplace_turn(MOVE_RIGHT_INPLACE);
-    } else {
-      disable_sensors_correction();
-      move_inplace_turn(movement);
+
+      move_inplace_turn(
+          MOVE_LEFT_INPLACE
+      );
+
+      keep_front_distance(
+          MIDDLE_MAZE_DISTANCE,
+          150
+      );
+
+      move_inplace_turn(
+          MOVE_LEFT_INPLACE
+      );
+
     }
+    else if (initial_walls.right) {
+
+      move_inplace_turn(
+          MOVE_RIGHT_INPLACE
+      );
+
+      keep_front_distance(
+          MIDDLE_MAZE_DISTANCE,
+          150
+      );
+
+      move_inplace_turn(
+          MOVE_RIGHT_INPLACE
+      );
+
+    }
+    else {
+
+      disable_sensors_correction();
+
+      move_inplace_turn(
+          movement
+      );
+    }
+
     reset_control_errors();
 
-  } else {
-    move_straight(MIDDLE_MAZE_DISTANCE * 1.75f - current_cell_start_mm, 300, false, true);
+  }
+  else {
+
+    move_straight(
+        MIDDLE_MAZE_DISTANCE * 1.75f
+            - current_cell_start_mm,
+        300,
+        false,
+        true
+    );
+
     disable_sensors_correction();
-    move_inplace_turn(movement);
+
+    move_inplace_turn(
+        movement
+    );
   }
 
+
   switch (movement) {
+
     case MOVE_BACK_WALL:
     case MOVE_BACK_STOP:
+
       set_check_motors_saturated_enabled(false);
-      move_straight((CELL_DIMENSION - WALL_WIDTH) / 2 - ROBOT_BACK_LENGTH + 10, -100, false, true);
+
+      move_straight(
+          (CELL_DIMENSION - WALL_WIDTH) / 2
+              - ROBOT_BACK_LENGTH
+              + 10,
+          -100,
+          false,
+          true
+      );
+
       set_check_motors_saturated_enabled(true);
+
       set_starting_position();
+
       break;
+
+
     case MOVE_BACK:
-      move_straight((MIDDLE_MAZE_DISTANCE)-ROBOT_BACK_LENGTH, -100, false, true);
-      current_cell_start_mm = (MIDDLE_MAZE_DISTANCE - ROBOT_BACK_LENGTH) / 2;
+
+      move_straight(
+          MIDDLE_MAZE_DISTANCE
+              - ROBOT_BACK_LENGTH,
+          -100,
+          false,
+          true
+      );
+
+      current_cell_start_mm =
+          (MIDDLE_MAZE_DISTANCE
+           - ROBOT_BACK_LENGTH) / 2;
+
       break;
+
+
     default:
       break;
   }
-  reset_control_errors(); //? Aquí sí reseteamos al estar en una "posición inicial estática"
+
+
+  reset_control_errors();
+
 
   if (movement != MOVE_BACK_STOP) {
+
     set_front_sensors_angle_correction(false);
     set_front_sensors_diagonal_correction(false);
     set_side_sensors_correction(true);
-    move_straight(CELL_DIMENSION - SENSING_POINT_DISTANCE - current_cell_start_mm, kinematics.linear_speed, true, false);
+
+    move_straight(
+        CELL_DIMENSION
+            - SENSING_POINT_DISTANCE
+            - current_cell_start_mm,
+        kinematics.linear_speed,
+        true,
+        false
+    );
+
     enter_next_cell();
   }
+
 #endif
 }
-
 bool get_cell_change_toggle_state(void) {
   return cell_change_toggle_state;
 }
@@ -1257,7 +1489,7 @@ void configure_kinematics(enum speed_strategy speed) {
   kinematics = kinematics_settings[speed];
 
 #ifndef MMSIM_ENABLED
-  lsm6dsr_reload_config();
+  mpu6500_reload_config();
 #endif
 }
 
@@ -1617,7 +1849,7 @@ void run_side(enum movement movement, struct turn_params turn, struct turn_param
   }
 
   disable_sensors_correction();
-  // reset_control_errors(); //! Esto se había puesto por un problema en la acumulación de error según aumenta el número de giros realizados
+  reset_control_errors(); //! Esto se había puesto por un problema en la acumulación de error según aumenta el número de giros realizados
   move_arc_turn(turn);
 
   set_front_sensors_angle_correction(false);
@@ -1772,8 +2004,8 @@ void move_inplace_turn(enum movement movement) {
  */
 void move_inplace_angle(float angle, float rads) {
 #ifndef MMSIM_ENABLED
-  lsm6dsr_set_gyro_z_degrees(0);
-  float current_angle = lsm6dsr_get_gyro_z_degrees();
+  mpu6500_set_gyro_z_degrees(0);
+  float current_angle = mpu6500_get_gyro_z_degrees();
   float target_angle = current_angle + angle;
   if (target_angle > 360.0) {
     target_angle = 360.0 - target_angle;
@@ -1783,11 +2015,11 @@ void move_inplace_angle(float angle, float rads) {
   set_target_linear_speed(0.0);
   if (angle >= 0) {
     set_ideal_angular_speed(rads);
-    while (is_race_started() && !is_motor_saturated() && lsm6dsr_get_gyro_z_degrees() <= target_angle) {
+    while (is_race_started() && !is_motor_saturated() && mpu6500_get_gyro_z_degrees() <= target_angle) {
     }
   } else {
     set_ideal_angular_speed(-rads);
-    while (is_race_started() && !is_motor_saturated() && lsm6dsr_get_gyro_z_degrees() >= target_angle) {
+    while (is_race_started() && !is_motor_saturated() && mpu6500_get_gyro_z_degrees() >= target_angle) {
     }
   }
   set_ideal_angular_speed(0.0);
@@ -1978,7 +2210,7 @@ void move_run_sequence(enum movement *sequence_movements) {
             break;
         }
 
-        // TODO: Obtener las kinematics de giro a partir de la velocidad máxima de la recta
+        turn_params = kinematics_settings[speed_strategy].turns[sequence_movements[i]];
         run_side(sequence_movements[i], turn_params, next_turn_params);
         break;
       default:
