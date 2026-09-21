@@ -20,5 +20,6 @@ enum RC5_TRIGGER {
 
 void rc5_load_eeprom(void);
 void rc5_register(enum RC5_TRIGGER trigger);
+uint32_t rc5_get_last_code(void);
 
 #endif

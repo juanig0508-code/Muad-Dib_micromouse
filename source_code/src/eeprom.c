@@ -35,6 +35,7 @@ void eeprom_load(void) {
   floodfill_load_maze();
   menu_run_load_values();
   rc5_load_eeprom();
+  rc5_mappings_load_eeprom();
 }
 
 void eeprom_clear(void) {
