@@ -256,6 +256,107 @@ static void debug_zone(void)
 
 /*
  * ============================================================
+ * PRUEBAS DE MOVIMIENTO (botones numéricos del control remoto)
+ * ============================================================
+ *
+ * Disponibles en cualquier momento mientras el robot está
+ * detenido (menú). Cada prueba arranca, hace un único movimiento
+ * y al terminar vuelve sola al menú principal.
+ *
+ *   1 -> giro de 90°  en el lugar, con el giroscopio
+ *   2 -> giro de 180° en el lugar, con el giroscopio
+ *   3 -> avanza 100 cm derecho (giroscopio + encoders)
+ *   4 -> giro de exploración a la izquierda (MOVE_LEFT)
+ *   5 -> giro de exploración a la derecha  (MOVE_RIGHT)
+ */
+
+#define SELFTEST_TURN_ANGULAR_SPEED_RADPS 4.0f
+#define SELFTEST_STRAIGHT_DISTANCE_MM 1000
+#define SELFTEST_STRAIGHT_SPEED_MMPS 300
+
+static void selftest_begin(void)
+{
+    set_sensors_enabled(true);
+    delay(200);
+    set_race_started(true);
+    reset_heading_reference();
+}
+
+static void selftest_end(void)
+{
+    set_race_started(false);
+}
+
+static void selftest_turn_90(void)
+{
+    selftest_begin();
+    move_inplace_angle(90.0f, SELFTEST_TURN_ANGULAR_SPEED_RADPS);
+    selftest_end();
+}
+
+static void selftest_turn_180(void)
+{
+    selftest_begin();
+    move_inplace_angle(180.0f, SELFTEST_TURN_ANGULAR_SPEED_RADPS);
+    selftest_end();
+}
+
+static void selftest_straight_100cm(void)
+{
+    selftest_begin();
+    move_straight(SELFTEST_STRAIGHT_DISTANCE_MM, SELFTEST_STRAIGHT_SPEED_MMPS, false, true);
+    selftest_end();
+}
+
+/*
+ * Mismo giro que usa handwall/floodfill al explorar (MOVE_LEFT o
+ * MOVE_RIGHT), con la velocidad/ángulo/radio de la pantalla de
+ * SPEED actualmente seleccionada.
+ */
+static void selftest_explore_turn(enum movement movement)
+{
+    selftest_begin();
+    configure_kinematics(menu_run_get_speed());
+    move(movement);
+    selftest_end();
+}
+
+static void check_selftest_buttons(void)
+{
+    static bool num1_prev = false;
+    static bool num2_prev = false;
+    static bool num3_prev = false;
+    static bool num4_prev = false;
+    static bool num5_prev = false;
+
+    bool num1_now = get_num1_btn();
+    bool num2_now = get_num2_btn();
+    bool num3_now = get_num3_btn();
+    bool num4_now = get_num4_btn();
+    bool num5_now = get_num5_btn();
+
+    if (num1_now && !num1_prev) {
+        selftest_turn_90();
+    } else if (num2_now && !num2_prev) {
+        selftest_turn_180();
+    } else if (num3_now && !num3_prev) {
+        selftest_straight_100cm();
+    } else if (num4_now && !num4_prev) {
+        selftest_explore_turn(MOVE_LEFT);
+    } else if (num5_now && !num5_prev) {
+        selftest_explore_turn(MOVE_RIGHT);
+    }
+
+    num1_prev = num1_now;
+    num2_prev = num2_now;
+    num3_prev = num3_now;
+    num4_prev = num4_now;
+    num5_prev = num5_now;
+}
+
+
+/*
+ * ============================================================
  * MAIN
  * ============================================================
  */
@@ -381,6 +482,14 @@ int main(void)
              */
 
             menu_handler();
+
+
+            /*
+             * Pruebas de movimiento con los botones numéricos
+             * del control remoto (ver definición más arriba).
+             */
+
+            check_selftest_buttons();
 
 
             /*
