@@ -7,7 +7,7 @@ uint8_t modeConfig = MODE_CALIBRATION;
 #define NUM_MODES 2
 
 int8_t valueConfig[NUM_MODES] = {0, 0};
-#define NUM_VALUES_CALIBRATION 5
+#define NUM_VALUES_CALIBRATION 6
 #define NUM_VALUES_DEBUG 10
 
 /**
@@ -44,6 +44,9 @@ static void handle_menu_config_value(void) {
           break;
         case CALIBRATE_STORE_EEPROM:
           set_leds_blink(250);
+          break;
+        case CALIBRATE_IR_REMOTE:
+          set_info_leds();
           break;
       }
       calibrate_from_config(valueConfig[modeConfig]);

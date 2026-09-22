@@ -33,6 +33,9 @@ void calibrate_from_config(uint8_t type) {
       case CALIBRATE_STORE_EEPROM:
         eeprom_save();
         break;
+      case CALIBRATE_IR_REMOTE:
+        rc5_mappings_learn();
+        break;
     }
     set_RGB_color(0, 0, 0);
     calibration_enabled = false;
