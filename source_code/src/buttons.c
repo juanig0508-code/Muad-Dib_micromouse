@@ -16,6 +16,8 @@ static uint32_t btn_ir_menu_up_ms = 0;
 static uint32_t btn_ir_menu_down_ms = 0;
 static uint32_t btn_ir_menu_mode_ms = 0;
 static uint32_t btn_play_pause_ms = 0;
+static uint32_t btn_prev_ms = 0;
+static uint32_t btn_next_ms = 0;
 
 static uint32_t rc5_last_code_count = 0;
 static uint32_t btn_ir_last_seen_ms[RC5_MAPPINGS_NUM_BUTTONS] = {0};
@@ -35,6 +37,10 @@ static uint32_t *get_ir_btn_ms(enum RC5_BUTTON button) {
       return &btn_ir_menu_up_ms;
     case RC5_PLAY_PAUSE:
       return &btn_play_pause_ms;
+    case RC5_PREV:
+      return &btn_prev_ms;
+    case RC5_NEXT:
+      return &btn_next_ms;
   }
   return NULL;
 }
@@ -165,6 +171,24 @@ bool get_menu_mode_btn(void) {
  */
 bool get_play_pause_btn(void) {
   return btn_play_pause_ms > 0 && get_clock_ticks() - btn_play_pause_ms > RC5_BUTTON_DEBOUNCE_MS;
+}
+
+/**
+ * @brief Obtiene el estado del botón Prev (solo IR, elige seguir pared izquierda)
+ *
+ * @return bool
+ */
+bool get_prev_btn(void) {
+  return btn_prev_ms > 0 && get_clock_ticks() - btn_prev_ms > RC5_BUTTON_DEBOUNCE_MS;
+}
+
+/**
+ * @brief Obtiene el estado del botón Next (solo IR, elige seguir pared derecha)
+ *
+ * @return bool
+ */
+bool get_next_btn(void) {
+  return btn_next_ms > 0 && get_clock_ticks() - btn_next_ms > RC5_BUTTON_DEBOUNCE_MS;
 }
 
 void set_debug_btn(bool state){

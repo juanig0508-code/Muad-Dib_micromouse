@@ -256,6 +256,20 @@ static void handle_menu_run_btn(void) {
     }
     menu_run_down();
   }
+
+  if (get_prev_btn()) {
+    while (get_prev_btn()) {
+      handle_menu_run_values();
+    }
+    menu_run_select_left_hand();
+  }
+
+  if (get_next_btn()) {
+    while (get_next_btn()) {
+      handle_menu_run_values();
+    }
+    menu_run_select_right_hand();
+  }
 }
 #endif
 
@@ -373,6 +387,29 @@ bool menu_run_can_start(void) {
 
 bool menu_run_use_left_hand(void) {
   return valueRun[MODE_RACE] == RACE_ARMED_LEFT;
+}
+
+/*
+ * Botones dedicados PREV/NEXT del control remoto para elegir la
+ * pared a seguir. Solo tienen efecto en la pantalla de CARRERA,
+ * para no interferir con la navegación normal del menú.
+ */
+void menu_run_select_left_hand(void) {
+#ifndef MMSIM_ENABLED
+  if (modeRun == MODE_RACE) {
+    valueRun[MODE_RACE] = RACE_ARMED_LEFT;
+    menu_run_save_values();
+  }
+#endif
+}
+
+void menu_run_select_right_hand(void) {
+#ifndef MMSIM_ENABLED
+  if (modeRun == MODE_RACE) {
+    valueRun[MODE_RACE] = RACE_ARMED_RIGHT;
+    menu_run_save_values();
+  }
+#endif
 }
 
 int16_t *get_menu_run_values(void) {

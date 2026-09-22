@@ -59,6 +59,8 @@ void menu_run_save_values(void);
 
 bool menu_run_can_start(void);
 bool menu_run_use_left_hand(void);
+void menu_run_select_left_hand(void);
+void menu_run_select_right_hand(void);
 
 void menu_run_mode_change(void);
 void menu_run_up(void);

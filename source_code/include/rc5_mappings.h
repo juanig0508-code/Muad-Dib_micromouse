@@ -4,7 +4,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define RC5_MAPPINGS_NUM_BUTTONS 4
+#define RC5_MAPPINGS_NUM_BUTTONS 6
 #define RC5_MAPPINGS_INTS_PER_BUTTON 2
 #define RC5_MAPPINGS_DATA_LENGTH (RC5_MAPPINGS_NUM_BUTTONS * RC5_MAPPINGS_INTS_PER_BUTTON)
 
@@ -13,6 +13,8 @@ enum RC5_BUTTON {
   RC5_CH_DOWN = 1,
   RC5_CH_UP = 2,
   RC5_PLAY_PAUSE = 3,
+  RC5_PREV = 4,
+  RC5_NEXT = 5,
 };
 
 void rc5_mappings_load_eeprom(void);
