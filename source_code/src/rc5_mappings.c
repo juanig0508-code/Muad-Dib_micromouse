@@ -8,7 +8,8 @@
 #define RC5_LEARN_TIMEOUT_MS 10000
 
 static const enum RC5_BUTTON rc5_learn_order[RC5_MAPPINGS_NUM_BUTTONS] = {
-    RC5_CH_MODE, RC5_CH_DOWN, RC5_CH_UP, RC5_PLAY_PAUSE, RC5_PREV, RC5_NEXT};
+    RC5_CH_MODE, RC5_CH_DOWN, RC5_CH_UP, RC5_PLAY_PAUSE, RC5_PREV, RC5_NEXT,
+    RC5_NUM_1, RC5_NUM_2, RC5_NUM_3, RC5_NUM_4, RC5_NUM_5};
 
 static uint32_t rc5_button_codes[RC5_MAPPINGS_NUM_BUTTONS];
 
@@ -77,10 +78,13 @@ static void blink_status_led(uint8_t times, uint32_t on_ms, uint32_t off_ms) {
 /**
  * @brief Modo de aprendizaje: pide, uno por uno, que se presione en el
  * control remoto el botón correspondiente a CH_MODE, CH_DOWN, CH_UP,
- * PLAY_PAUSE, PREV y NEXT, capturando su código y guardándolo en
- * EEPROM al final.
+ * PLAY_PAUSE, PREV, NEXT y los botones numéricos NUM_1 a NUM_5,
+ * capturando su código y guardándolo en EEPROM al final.
  *
- * Los LEDs de información (0-5) indican qué botón se está esperando.
+ * Los LEDs de información (0-9) indican qué botón se está esperando,
+ * uno por uno. Como hay 11 botones y solo 10 LEDs, el último botón
+ * (NUM_5) se indica con todos los LEDs encendidos a la vez.
+ *
  * El LED de estado da la confirmación: un parpadeo corto por cada
  * botón capturado, tres parpadeos largos al terminar con éxito, y
  * parpadeos rápidos si se cancela por no recibir ninguna señal dentro
@@ -89,7 +93,11 @@ static void blink_status_led(uint8_t times, uint32_t on_ms, uint32_t off_ms) {
 void rc5_mappings_learn(void) {
   for (uint8_t i = 0; i < RC5_MAPPINGS_NUM_BUTTONS; i++) {
     clear_info_leds();
-    set_info_led(i, true);
+    if (i < 10) {
+      set_info_led(i, true);
+    } else {
+      set_info_leds();
+    }
 
     uint32_t start_count = rc5_get_code_count();
     uint32_t start_ms = get_clock_ticks();

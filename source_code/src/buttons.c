@@ -18,6 +18,11 @@ static uint32_t btn_ir_menu_mode_ms = 0;
 static uint32_t btn_play_pause_ms = 0;
 static uint32_t btn_prev_ms = 0;
 static uint32_t btn_next_ms = 0;
+static uint32_t btn_num1_ms = 0;
+static uint32_t btn_num2_ms = 0;
+static uint32_t btn_num3_ms = 0;
+static uint32_t btn_num4_ms = 0;
+static uint32_t btn_num5_ms = 0;
 
 static uint32_t rc5_last_code_count = 0;
 static uint32_t btn_ir_last_seen_ms[RC5_MAPPINGS_NUM_BUTTONS] = {0};
@@ -41,6 +46,16 @@ static uint32_t *get_ir_btn_ms(enum RC5_BUTTON button) {
       return &btn_prev_ms;
     case RC5_NEXT:
       return &btn_next_ms;
+    case RC5_NUM_1:
+      return &btn_num1_ms;
+    case RC5_NUM_2:
+      return &btn_num2_ms;
+    case RC5_NUM_3:
+      return &btn_num3_ms;
+    case RC5_NUM_4:
+      return &btn_num4_ms;
+    case RC5_NUM_5:
+      return &btn_num5_ms;
   }
   return NULL;
 }
@@ -189,6 +204,31 @@ bool get_prev_btn(void) {
  */
 bool get_next_btn(void) {
   return btn_next_ms > 0 && get_clock_ticks() - btn_next_ms > RC5_BUTTON_DEBOUNCE_MS;
+}
+
+/**
+ * @brief Botones numéricos (solo IR), usados para pruebas de movimiento
+ *
+ * @return bool
+ */
+bool get_num1_btn(void) {
+  return btn_num1_ms > 0 && get_clock_ticks() - btn_num1_ms > RC5_BUTTON_DEBOUNCE_MS;
+}
+
+bool get_num2_btn(void) {
+  return btn_num2_ms > 0 && get_clock_ticks() - btn_num2_ms > RC5_BUTTON_DEBOUNCE_MS;
+}
+
+bool get_num3_btn(void) {
+  return btn_num3_ms > 0 && get_clock_ticks() - btn_num3_ms > RC5_BUTTON_DEBOUNCE_MS;
+}
+
+bool get_num4_btn(void) {
+  return btn_num4_ms > 0 && get_clock_ticks() - btn_num4_ms > RC5_BUTTON_DEBOUNCE_MS;
+}
+
+bool get_num5_btn(void) {
+  return btn_num5_ms > 0 && get_clock_ticks() - btn_num5_ms > RC5_BUTTON_DEBOUNCE_MS;
 }
 
 void set_debug_btn(bool state){

@@ -20,6 +20,11 @@ bool get_menu_mode_btn(void);
 bool get_play_pause_btn(void);
 bool get_prev_btn(void);
 bool get_next_btn(void);
+bool get_num1_btn(void);
+bool get_num2_btn(void);
+bool get_num3_btn(void);
+bool get_num4_btn(void);
+bool get_num5_btn(void);
 bool consume_start_run_request(void);
 
 void set_debug_btn(bool state);
