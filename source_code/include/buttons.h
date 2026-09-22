@@ -18,6 +18,7 @@ bool get_menu_up_btn(void);
 bool get_menu_down_btn(void);
 bool get_menu_mode_btn(void);
 bool get_play_pause_btn(void);
+bool consume_start_run_request(void);
 
 void set_debug_btn(bool state);
 bool get_debug_btn(void);

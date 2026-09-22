@@ -22,6 +22,9 @@ static uint32_t btn_ir_last_seen_ms[RC5_MAPPINGS_NUM_BUTTONS] = {0};
 
 static bool debug_btn = false;
 
+static bool play_pause_prev = false;
+static bool start_run_requested = false;
+
 static uint32_t *get_ir_btn_ms(enum RC5_BUTTON button) {
   switch (button) {
     case RC5_CH_MODE:
@@ -88,9 +91,38 @@ static void check_ir_buttons(void) {
   }
 }
 
+/*
+ * Detecta el flanco de subida de Play/Pause y decide qué hacer,
+ * sin bloquear: si el robot está corriendo, lo detiene al toque
+ * (seguro llamarlo desde la interrupción del SysTick, ya que
+ * set_race_started() solo escribe una bandera volatile). Si no
+ * está corriendo, deja pedido un inicio para que main() lo arranque
+ * cuando pueda (arrancar sí implica llamadas bloqueantes).
+ */
+static void check_play_pause_btn(void) {
+  bool play_pause_now = get_play_pause_btn();
+
+  if (play_pause_now && !play_pause_prev) {
+    if (is_race_started()) {
+      set_race_started(false);
+    } else {
+      start_run_requested = true;
+    }
+  }
+
+  play_pause_prev = play_pause_now;
+}
+
+bool consume_start_run_request(void) {
+  bool requested = start_run_requested;
+  start_run_requested = false;
+  return requested;
+}
+
 void check_buttons(void) {
   check_analog_buttons();
   check_ir_buttons();
+  check_play_pause_btn();
 }
 
 /**

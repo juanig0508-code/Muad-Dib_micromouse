@@ -12,10 +12,17 @@ uint8_t modeRun = MODE_SPEED;
 #define MODE_SPEED_VALUES 6
 #define MODE_EXPLORE_TYPE_VALUES 3
 #define MODE_FLOODFILL_TYPE_VALUES 3
-#define MODE_RACE_VALUES 2
 #define MODE_MAZE_TYPE_VALUES 2
 #define MODE_EXPLORE_ALGORITHM_VALUES 3
 #define MODE_SOLVE_STRATEGY_VALUES 2
+
+/*
+ * Valores de valueRun[MODE_RACE]: no es un contador genérico,
+ * indica si el robot está armado y con qué mano/pared sigue.
+ */
+#define RACE_DISARMED 0
+#define RACE_ARMED_LEFT 1
+#define RACE_ARMED_RIGHT 2
 
 int16_t valueRun[MENU_RUN_NUM_MODES] = {0, 0, 0, 0, 0, 0, 1};
 
@@ -177,7 +184,7 @@ static void handle_menu_run_values(void)
      */
     if (modeRun == MODE_RACE) {
 
-        bool armed = (valueRun[MODE_RACE] == 1);
+        bool armed = (valueRun[MODE_RACE] != RACE_DISARMED);
 
         show_count_row1(5, armed ? true : blinkState);
         set_row2_all(armed ? true : blinkState);
@@ -281,7 +288,7 @@ bool menu_run_handler(void) {
 
 void menu_run_reset(void) {
   modeRun = MODE_SPEED;
-  valueRun[MODE_RACE] = 0;
+  valueRun[MODE_RACE] = RACE_DISARMED;
 }
 
 void menu_run_load_values(void) {
@@ -290,7 +297,14 @@ void menu_run_load_values(void) {
   for (uint16_t i = DATA_INDEX_MENU_RUN; i < (DATA_INDEX_MENU_RUN + MENU_RUN_NUM_MODES); i++) {
     valueRun[i - DATA_INDEX_MENU_RUN] = data[i];
   }
-  valueRun[MODE_RACE] = 0;
+  valueRun[MODE_RACE] = RACE_DISARMED;
+#endif
+}
+
+void menu_run_save_values(void) {
+#ifndef MMSIM_ENABLED
+  eeprom_set_data(DATA_INDEX_MENU_RUN, valueRun, MENU_RUN_NUM_MODES);
+  eeprom_save();
 #endif
 }
 
@@ -300,13 +314,20 @@ void menu_run_mode_change() {
 
 void menu_run_up() {
 #ifndef MMSIM_ENABLED
+  /*
+   * En la pantalla de CARRERA, UP arma el robot para seguir
+   * la pared IZQUIERDA (en vez de incrementar un valor genérico).
+   */
+  if (modeRun == MODE_RACE) {
+    valueRun[MODE_RACE] = RACE_ARMED_LEFT;
+    menu_run_save_values();
+    return;
+  }
+
   uint8_t mode_values = 0;
   switch (modeRun) {
     case MODE_SPEED:
       mode_values = MODE_SPEED_VALUES;
-      break;
-    case MODE_RACE:
-      mode_values = MODE_RACE_VALUES;
       break;
     case MODE_EXPLORE_TYPE:
       mode_values = MODE_EXPLORE_TYPE_VALUES;
@@ -325,15 +346,22 @@ void menu_run_up() {
       break;
   }
   valueRun[modeRun] = (valueRun[modeRun] + 1) % mode_values;
-  if (modeRun == MODE_RACE && valueRun[modeRun] == 1) {
-    set_RGB_color(50, 0, 0);
-    eeprom_set_data(DATA_INDEX_MENU_RUN, valueRun, MENU_RUN_NUM_MODES);
-    eeprom_save();
-  }
 #endif
 }
 
 void menu_run_down() {
+  /*
+   * En la pantalla de CARRERA, DOWN arma el robot para seguir
+   * la pared DERECHA (en vez de decrementar un valor genérico).
+   */
+  if (modeRun == MODE_RACE) {
+#ifndef MMSIM_ENABLED
+    valueRun[MODE_RACE] = RACE_ARMED_RIGHT;
+    menu_run_save_values();
+#endif
+    return;
+  }
+
   if (valueRun[modeRun] > 0) {
     valueRun[modeRun]--;
   }
@@ -341,6 +369,10 @@ void menu_run_down() {
 
 bool menu_run_can_start(void) {
   return modeRun == MODE_RACE && valueRun[MODE_RACE] > 0;
+}
+
+bool menu_run_use_left_hand(void) {
+  return valueRun[MODE_RACE] == RACE_ARMED_LEFT;
 }
 
 int16_t *get_menu_run_values(void) {
