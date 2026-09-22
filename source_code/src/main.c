@@ -331,26 +331,39 @@ int main(void)
     /*
      * Emparejamiento del control remoto IR.
      *
-     * Si al arrancar se mantienen presionados los botones
-     * UP + DOWN juntos durante 1.5 segundos, se entra en modo
-     * aprendizaje: se piden en orden los botones CH_MODE,
-     * CH_DOWN, CH_UP y PLAY_PAUSE, y los códigos capturados
-     * quedan guardados en EEPROM.
+     * Si al arrancar se presiona el botón MODE dos veces
+     * seguidas (doble toque, como doble clic) se entra en
+     * modo aprendizaje: se piden en orden los botones
+     * CH_MODE, CH_DOWN, CH_UP y PLAY_PAUSE, y los códigos
+     * capturados quedan guardados en EEPROM.
      */
 
-    if (get_menu_up_btn() && get_menu_down_btn()) {
-        uint32_t combo_press_ms = get_clock_ticks();
+    if (get_menu_mode_btn()) {
+        uint32_t first_tap_ms = get_clock_ticks();
 
+        // El primer toque debe soltarse rápido (<=500ms);
+        // si se mantiene más que eso no es un doble toque.
         while (
-            get_menu_up_btn() &&
-            get_menu_down_btn() &&
-            get_clock_ticks() - combo_press_ms < 1500
+            get_menu_mode_btn() &&
+            get_clock_ticks() - first_tap_ms <= 500
         ) {
             warning_status_led(100);
         }
 
-        if (get_clock_ticks() - combo_press_ms >= 1500) {
-            rc5_mappings_learn();
+        if (get_clock_ticks() - first_tap_ms <= 500) {
+            uint32_t released_ms = get_clock_ticks();
+            bool second_tap = false;
+
+            while (get_clock_ticks() - released_ms < 500) {
+                if (get_menu_mode_btn()) {
+                    second_tap = true;
+                    break;
+                }
+            }
+
+            if (second_tap) {
+                rc5_mappings_learn();
+            }
         }
     }
 
