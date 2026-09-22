@@ -1,12 +1,24 @@
-![ZoroBot3 - Menu](./images/ZoroBot3_menu.png "ZoroBot3 Menú")
+![ZoroBot3 - Menu](./images/ZoroBot3_menu.png "ZoroBot3 Menú y Control IR")
 
 # Operativa General
 
-## Tipos de Ejecución
+El robot se maneja con el botón físico de menú (MODE / UP / DOWN) o con un
+control remoto IR emparejado (ver imagen de arriba para el detalle completo
+de pantallas, botones y el procedimiento de emparejamiento).
 
-- **EXPLORE**: Tapando el led frontal derecho:
-- **EXPLORE & RUN**: Tapando el led frontal derecho y, posteriormente, el led frontal izquierdo.
-- **RUN**: Tapando el led frontal izquierdo.
+## Tipos de Inicio de Carrera
+
+- **Tapando sensores** (método original): tapar el sensor frontal derecho
+  inicia **EXPLORE**; tapar primero el derecho y luego el izquierdo inicia
+  **EXPLORE & RUN**; tapar el izquierdo inicia **RUN** (correr un laberinto
+  ya resuelto).
+- **Con el control remoto IR**: elegir la pared a seguir (PREV/NEXT o UP/DOWN
+  en la pantalla CARRERA) y presionar **PLAY/PAUSE** inicia la carrera con el
+  algoritmo de exploración seleccionado en el menú. En Floodfill este método
+  siempre explora un laberinto nuevo; para correr uno ya resuelto se sigue
+  usando el método de tapar el sensor izquierdo.
+- Presionar **PLAY/PAUSE** en cualquier momento, durante cualquier algoritmo,
+  detiene el robot al instante.
 
 ## Tipos de Mapeo
 
@@ -24,5 +36,5 @@
 ## Advertencias importantes
 
 - **Se requiere reiniciar el robot** después de la ejecución de cada tipo de inicio (**EXPLORE**, **EXPLORE & RUN**, **RUN**).
-- Si se pretende hacer un **EXPLORE_COMPLETE** como refinamiento de un mapeo anterior y se ha reiniciado el robot, **es necesario pulsar el botón de menú** una vez el robot esté en modo iniciando (con el RGB en rojo esperando orden de arrancar) para que el led rojo de menú se apague y **no se borre todo el mapeo anterior**.
+- Si se pretende hacer un **EXPLORE_COMPLETE** como refinamiento de un mapeo anterior y se ha reiniciado el robot, **es necesario pulsar el botón de menú** una vez el robot esté armado en la pantalla CARRERA (los 10 LEDs fijos, esperando orden de arrancar) para **no borrar todo el mapeo anterior**.
 
