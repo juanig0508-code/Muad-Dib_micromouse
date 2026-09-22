@@ -1,6 +1,6 @@
 # ZoroBot3
 
-Nuestra versión de un robot laberinto (micromouse) basada en el ZoroBot3 de [OPRobots](https://github.com/OPRobots). Robot con STM32F4, encoders magnéticos de alta resolución, succión y muchos leds molones.
+Nuestra versión de un robot laberinto (micromouse) basada en el ZoroBot3 de [OPRobots](https://github.com/OPRobots). Robot con STM32F4, encoders magnéticos de alta resolución, succión y sensores IR.
 
 ## ⚙️ Hardware
 
