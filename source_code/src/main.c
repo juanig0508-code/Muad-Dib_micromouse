@@ -545,6 +545,66 @@ int main(void)
                     }
                 }
             }
+
+
+            /*
+             * Inicio de carrera con el botón Play/Pause del
+             * control remoto, sin necesidad de tapar el sensor.
+             *
+             * Usa el lado elegido con UP (pared izquierda) /
+             * DOWN (pared derecha) en la pantalla de CARRERA.
+             * En Floodfill siempre explora un laberinto nuevo;
+             * para correr uno ya resuelto se sigue usando el
+             * sensor tapado como hasta ahora.
+             */
+
+            bool start_run_requested = consume_start_run_request();
+
+            if (
+                menu_run_can_start() &&
+                start_run_requested
+            )
+            {
+                set_race_started(true);
+                menu_run_reset();
+
+                switch (menu_run_get_explore_algorithm())
+                {
+
+                    case EXPLORE_HANDWALL:
+
+                        if (menu_run_use_left_hand())
+                        {
+                            handwall_use_left_hand();
+                        }
+                        else
+                        {
+                            handwall_use_right_hand();
+                        }
+
+                        handwall_start();
+
+                        break;
+
+                    case EXPLORE_FLOODFILL:
+
+                        floodfill_start_explore();
+
+                        break;
+
+                    case EXPLORE_TIME_TRIAL:
+
+                        timetrial_start();
+
+                        break;
+
+                    default:
+
+                        set_race_started(false);
+
+                        break;
+                }
+            }
         }
 
 
