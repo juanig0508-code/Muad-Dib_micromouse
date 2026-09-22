@@ -14,7 +14,6 @@
 
 #include <mpu6500.h>
 #include <rc5.h>
-#include <rc5_mappings.h>
 #include <sensors.h>
 #include <setup.h>
 #include <usart.h>
@@ -326,32 +325,6 @@ int main(void)
      */
 
     show_battery_level();
-
-
-    /*
-     * Emparejamiento del control remoto IR.
-     *
-     * Si al arrancar se mantiene presionado el botón MODE
-     * durante 3 segundos, se entra en modo aprendizaje:
-     * se piden en orden los botones CH_MODE, CH_DOWN, CH_UP
-     * y PLAY_PAUSE, y los códigos capturados quedan guardados
-     * en EEPROM.
-     */
-
-    if (get_menu_mode_btn()) {
-        uint32_t mode_press_ms = get_clock_ticks();
-
-        while (
-            get_menu_mode_btn() &&
-            get_clock_ticks() - mode_press_ms < 3000
-        ) {
-            warning_status_led(100);
-        }
-
-        if (get_clock_ticks() - mode_press_ms >= 3000) {
-            rc5_mappings_learn();
-        }
-    }
 
 
     /*
