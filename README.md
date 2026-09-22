@@ -1,34 +1,12 @@
 # ZoroBot3
 
-Tercera versión de nuestro primer robot. Un robot micromouse de alto rendimiento con STM32F4, encoders magneticos de alta resolución, succión y muchos leds molones.
-
-![ZoroBot3](./images/ZoroBot3_rev2_finish_3.jpg "ZoroBot3")
-
-## 🏆 Palmarés
-
-| 🥇 | 🥈 | 🥉 |
-|:--:|:--:|:--:|
-| **7** | **0** | **0** |
-
-### Resultados por Evento
-
-| Evento | Categoría | Posición | Año |
-|--------|-----------|:--------:|:---:|
-| <img src="./images/flags/romania-flag-xs.png" height="16px" title="Rumanía" alt="🇷🇴"/> **RoboChallenge** | Maze | 🥇 | 2025 |
-| <img src="./images/flags/spain-flag-xs.png" height="16px" title="España" alt="🇪🇸"/> **OSHWDem** | Micromouse Classic | 🥇 | 2025 |
-| <img src="./images/flags/portugal-flag-xs.png" height="16px" title="Portugal" alt="🇵🇹"/> **Micromouse Portugese Contest** | Micromouse Classic | 🥇 | 2025 |
-| <img src="./images/flags/portugal-flag-xs.png" height="16px" title="Portugal" alt="🇵🇹"/> **Micromouse Portugese Contest** | Time Trial | 🥇 | 2025 |
-| <img src="./images/flags/romania-flag-xs.png" height="16px" title="Rumanía" alt="🇷🇴"/> **RoboChallenge** | Maze | 🥇 | 2024 |
-| <img src="./images/flags/spain-flag-xs.png" height="16px" title="España" alt="🇪🇸"/> **OSHWDem** | Micromouse Classic | 🥇 | 2024 |
-| <img src="./images/flags/spain-flag-xs.png" height="16px" title="España" alt="🇪🇸"/> **OSHWDem** | Micromouse Wall-Follower | 🥇 | 2023 |
-
----
+Nuestra versión de un robot laberinto (micromouse) basada en el ZoroBot3 de [OPRobots](https://github.com/OPRobots). Robot con STM32F4, encoders magnéticos de alta resolución, succión y muchos leds molones.
 
 ## ⚙️ Hardware
 
 - **Microcontrolador**: STM32F405RGT6 @168MHz
 - **Driver de motores**: MP6551 @20kHz
-- **Giroscopio**: LSM6DSRTR 4000dps
+- **Giroscopio**: MPU6500 2000dps
 - **Encoders**: AS5145B-HSST
 - **Mosfets**: AO3400 (A09T) Tanto para conmutar los emisores de los sensores como para la succión
 - **Regulador**: CN3903 + LDO ME611C33M5G
@@ -48,8 +26,6 @@ Tercera versión de nuestro primer robot. Un robot micromouse de alto rendimient
   - 2x Rodamientos MR52ZZ (Encoders)
   - 2x Imán radial 6x2.5mm
 
-![ZoroBot3 Chasis](./images/ZoroBot3_rev2_3d_model.png "ZoroBot3 - Chasis")
-
 ## 💻 Software
 
 - Programado en VSCode y PlatformIO con LibOpenCM3.
@@ -60,26 +36,5 @@ Tercera versión de nuestro primer robot. Un robot micromouse de alto rendimient
 - El bucle principal de control, del que constan los PID de velocidad lineal, velocidad angular, control frontal y control lateral se ejecuta cada 1ms.
 - Se realiza un reseteo de posición por périda de pared lateral para mejorar la navegación.
 - Las curvas se realizan mediante perfiles de giro con **aceleración senoidal** para mayor suavidad.
-- Dispone de programas para seguimiento de pared derecha/izquierda, exploración y resolución mediante floodfill basado en pesos (más información en [TimeBased FloodFill Simulator](https://github.com/OPRobots/TimeBased-FloodFill-Simulator)) y hardcodeo de movimientos.
-
-## 🎥 Vídeos
-
-### OSHWDem 2025 - 🥇
-<p align="center" width="100%">
-<video src="https://github.com/user-attachments/assets/332fd117-6600-4692-b59f-4b1154166f3f" width="80%" controls></video>
-</p>
-
-### Micromouse Portugese Contest 2025 - 🥇
-<p align="center" width="100%">
-<video src="https://github.com/user-attachments/assets/cf21e942-3fe0-4065-8892-fa3d181a9791" width="80%" controls></video>
-</p>
-
-### RoboChallenge 2024 - 🥇
-<p align="center" width="100%">
-<video src="https://github.com/user-attachments/assets/a8c53e97-a756-4934-9c83-6c93fda1b235" width="80%" controls></video>
-</p>
-
-### OSHWDem 2024 - 🥇
-<p align="center" width="100%">
-<video src="https://github.com/user-attachments/assets/a70629e6-34b6-473f-afb0-14d8290bd128" width="80%" controls></video>
-</p>
+- Dispone de seguimiento de pared derecha/izquierda (handwall) como método de exploración y resolución del laberinto, además de hardcodeo de movimientos (time trial).
+- Control remoto IR emparejable para manejar el menú y disparar pruebas de movimiento sin necesidad de los botones físicos (ver [MENU.md](./MENU.md)).
