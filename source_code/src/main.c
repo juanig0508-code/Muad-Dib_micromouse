@@ -271,6 +271,7 @@ static void debug_zone(void)
  */
 
 #define SELFTEST_TURN_ANGULAR_SPEED_RADPS 4.0f
+#define SELFTEST_TURN_ANGULAR_DECEL_RADPS2 20.0f
 #define SELFTEST_STRAIGHT_DISTANCE_MM 1000
 #define SELFTEST_STRAIGHT_SPEED_MMPS 300
 
@@ -290,14 +291,14 @@ static void selftest_end(void)
 static void selftest_turn_90(void)
 {
     selftest_begin();
-    move_inplace_angle(90.0f, SELFTEST_TURN_ANGULAR_SPEED_RADPS);
+    move_inplace_angle(90.0f, SELFTEST_TURN_ANGULAR_SPEED_RADPS, SELFTEST_TURN_ANGULAR_DECEL_RADPS2);
     selftest_end();
 }
 
 static void selftest_turn_180(void)
 {
     selftest_begin();
-    move_inplace_angle(180.0f, SELFTEST_TURN_ANGULAR_SPEED_RADPS);
+    move_inplace_angle(180.0f, SELFTEST_TURN_ANGULAR_SPEED_RADPS, SELFTEST_TURN_ANGULAR_DECEL_RADPS2);
     selftest_end();
 }
 
