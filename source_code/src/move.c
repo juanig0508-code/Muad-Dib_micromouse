@@ -2002,7 +2002,7 @@ void move_inplace_turn(enum movement movement) {
  * @param angle
  * @param rads
  */
-void move_inplace_angle(float angle, float rads) {
+void move_inplace_angle(float angle, float rads, float angular_decel) {
 #ifndef MMSIM_ENABLED
   mpu6500_set_gyro_z_degrees(0);
   float current_angle = mpu6500_get_gyro_z_degrees();
@@ -2013,13 +2013,24 @@ void move_inplace_angle(float angle, float rads) {
     target_angle = 360.0 + target_angle;
   }
   set_target_linear_speed(0.0);
+
+  /*
+   * ideal_angular_speed no tiene rampa de frenado (a diferencia de
+   * ideal_linear_speed, ver update_ideal_linear_speed). Si se corta
+   * de golpe recien al llegar al angulo objetivo, la inercia real
+   * del robot lo hace seguir girando de mas antes de frenar.
+   * Por eso se corta unos grados antes, segun la distancia de
+   * frenado estimada para angular_decel.
+   */
+  float stop_angle_deg = (rads * rads) / (2.0f * angular_decel) * (180.0f / PI);
+
   if (angle >= 0) {
     set_ideal_angular_speed(rads);
-    while (is_race_started() && !is_motor_saturated() && mpu6500_get_gyro_z_degrees() <= target_angle) {
+    while (is_race_started() && !is_motor_saturated() && mpu6500_get_gyro_z_degrees() <= target_angle - stop_angle_deg) {
     }
   } else {
     set_ideal_angular_speed(-rads);
-    while (is_race_started() && !is_motor_saturated() && mpu6500_get_gyro_z_degrees() >= target_angle) {
+    while (is_race_started() && !is_motor_saturated() && mpu6500_get_gyro_z_degrees() >= target_angle + stop_angle_deg) {
     }
   }
   set_ideal_angular_speed(0.0);
