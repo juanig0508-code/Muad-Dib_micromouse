@@ -398,8 +398,11 @@ int8_t check_start_run(void) {
     set_RGB_color(0, 0, 0);
     set_status_led(false);
 
-    set_race_started(true);
-    menu_run_reset();
+    /*
+     * Ya no arranca la carrera acá: solo devuelve que lado se
+     * tapó. El inicio real queda a cargo de main.c, que espera
+     * la confirmación con el botón Play/Pause del control IR.
+     */
     return sensor;
   }
   return -1;
