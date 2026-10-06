@@ -466,6 +466,13 @@ int main(void)
      * ========================================================
      */
 
+    /*
+     * Lado detectado al tapar un sensor frontal (SENSOR_FRONT_LEFT_WALL_ID
+     * o SENSOR_FRONT_RIGHT_WALL_ID), pendiente de que se confirme con
+     * Play/Pause. -1 = no hay nada pendiente.
+     */
+    static int8_t sensor_armed_side = -1;
+
     while (1)
     {
 
@@ -519,9 +526,10 @@ int main(void)
 
 
             /*
-             * Si el menu esta situado en RUN,
-             * comprobamos los sensores frontales para
-             * iniciar el robot.
+             * Si el menu esta situado en RUN, comprobamos los
+             * sensores frontales. Taparlos ya NO arranca la
+             * carrera de una: solo queda "armado" ese lado,
+             * a la espera de que se confirme con Play/Pause.
              */
 
             if (menu_run_can_start())
@@ -529,149 +537,31 @@ int main(void)
                 int8_t sensor_started =
                     check_start_run();
 
-
-                /*
-                 * check_start_run() cambia race_started
-                 * cuando detecta la condicion de inicio.
-                 */
-
-                if (is_race_started())
+                if (sensor_started != -1)
                 {
-
-                    switch (
-                        menu_run_get_explore_algorithm()
-                    )
-                    {
-
-                        /*
-                         * ------------------------------------
-                         * HAND WALL
-                         * ------------------------------------
-                         */
-
-                        case EXPLORE_HANDWALL:
-
-                            switch (sensor_started)
-                            {
-
-                                case SENSOR_FRONT_LEFT_WALL_ID:
-
-                                    handwall_use_left_hand();
-
-                                    handwall_start();
-
-                                    break;
-
-
-                                case SENSOR_FRONT_RIGHT_WALL_ID:
-
-                                    handwall_use_right_hand();
-
-                                    handwall_start();
-
-                                    break;
-
-
-                                default:
-
-                                    set_race_started(false);
-
-                                    break;
-                            }
-
-                            break;
-
-
-                        /*
-                         * ------------------------------------
-                         * FLOODFILL
-                         * ------------------------------------
-                         */
-
-                        case EXPLORE_FLOODFILL:
-
-                            switch (sensor_started)
-                            {
-
-                                /*
-                                 * Sensor frontal izquierdo:
-                                 * carrera sobre laberinto
-                                 * ya explorado.
-                                 */
-
-                                case SENSOR_FRONT_LEFT_WALL_ID:
-
-                                    floodfill_start_run();
-
-                                    break;
-
-
-                                /*
-                                 * Sensor frontal derecho:
-                                 * exploracion del laberinto.
-                                 */
-
-                                case SENSOR_FRONT_RIGHT_WALL_ID:
-
-                                    floodfill_start_explore();
-
-                                    break;
-
-
-                                default:
-
-                                    set_race_started(false);
-
-                                    break;
-                            }
-
-                            break;
-
-
-                        /*
-                         * ------------------------------------
-                         * TIME TRIAL
-                         * ------------------------------------
-                         */
-
-                        case EXPLORE_TIME_TRIAL:
-
-                            timetrial_start();
-
-                            break;
-
-
-                        /*
-                         * ------------------------------------
-                         * ERROR
-                         * ------------------------------------
-                         */
-
-                        default:
-
-                            set_race_started(false);
-
-                            break;
-                    }
+                    sensor_armed_side = sensor_started;
                 }
             }
 
 
             /*
-             * Inicio de carrera con el botón Play/Pause del
-             * control remoto, sin necesidad de tapar el sensor.
+             * El inicio de carrera es siempre con el botón
+             * Play/Pause del control remoto: ya sea que se haya
+             * armado tapando un sensor frontal (sensor_armed_side)
+             * o eligiendo el lado en la pantalla de CARRERA con
+             * PREV/NEXT o UP/DOWN (menu_run_can_start()).
              *
-             * Usa el lado elegido con UP (pared izquierda) /
-             * DOWN (pared derecha) en la pantalla de CARRERA.
-             * En Floodfill siempre explora un laberinto nuevo;
-             * para correr uno ya resuelto se sigue usando el
-             * sensor tapado como hasta ahora.
+             * Si se armó por sensor, ese lado tiene prioridad
+             * sobre lo elegido en el menú. En Floodfill, el sensor
+             * izquierdo sigue significando "correr laberinto ya
+             * explorado" y el derecho "explorar uno nuevo"; desde
+             * el menú (sin sensor) siempre explora uno nuevo.
              */
 
             bool start_run_requested = consume_start_run_request();
 
             if (
-                menu_run_can_start() &&
+                (sensor_armed_side != -1 || menu_run_can_start()) &&
                 start_run_requested
             )
             {
@@ -683,7 +573,15 @@ int main(void)
 
                     case EXPLORE_HANDWALL:
 
-                        if (menu_run_use_left_hand())
+                        if (sensor_armed_side == SENSOR_FRONT_RIGHT_WALL_ID)
+                        {
+                            handwall_use_right_hand();
+                        }
+                        else if (sensor_armed_side == SENSOR_FRONT_LEFT_WALL_ID)
+                        {
+                            handwall_use_left_hand();
+                        }
+                        else if (menu_run_use_left_hand())
                         {
                             handwall_use_left_hand();
                         }
@@ -698,7 +596,14 @@ int main(void)
 
                     case EXPLORE_FLOODFILL:
 
-                        floodfill_start_explore();
+                        if (sensor_armed_side == SENSOR_FRONT_LEFT_WALL_ID)
+                        {
+                            floodfill_start_run();
+                        }
+                        else
+                        {
+                            floodfill_start_explore();
+                        }
 
                         break;
 
@@ -714,6 +619,8 @@ int main(void)
 
                         break;
                 }
+
+                sensor_armed_side = -1;
             }
         }
 
