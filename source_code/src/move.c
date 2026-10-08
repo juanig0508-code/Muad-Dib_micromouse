@@ -1623,7 +1623,8 @@ void keep_front_distance(uint16_t distance, uint16_t timeout) {
   set_front_sensors_distance_correction(true);
   set_ideal_front_distance(distance);
   uint16_t count = 0;
-  while (front_wall_detection() && (abs(get_front_wall_distance() - distance) > 2 || count < timeout)) {
+  uint32_t deadline = get_clock_ticks() + 1500;
+  while (front_wall_detection() && get_clock_ticks() < deadline && (abs(get_front_wall_distance() - distance) > 2 || count < timeout)) {
     if (abs(get_front_wall_distance() - distance) <= 2) {
       count++;
       // } else {

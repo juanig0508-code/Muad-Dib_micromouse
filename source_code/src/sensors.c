@@ -556,8 +556,14 @@ uint16_t get_front_wall_distance(void) {
  * Estos thresholds NO controlan el centrado del robot.
  * Solo sirven para get_walls()/Handwall.
  */
+/*
+ * Umbrales ubicados en la misma posicion relativa (~40%) entre
+ * "lateral despejado" y "pared centrado" de cada sensor. El raw
+ * derecho lee ~1.6 veces el izquierdo, por eso no pueden ser
+ * numericamente iguales.
+ */
 #define SENSOR_SIDE_LEFT_NAV_RAW_WALL_DETECTION   220U
-#define SENSOR_SIDE_RIGHT_NAV_RAW_WALL_DETECTION  300U
+#define SENSOR_SIDE_RIGHT_NAV_RAW_WALL_DETECTION  340U
 
 static bool left_wall_navigation_detection(void) {
   return get_sensor_raw_filter(SENSOR_SIDE_LEFT_WALL_ID) >=
