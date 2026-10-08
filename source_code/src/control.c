@@ -576,17 +576,16 @@ void control_loop(void) {
     return;
   }
   /*
+   * Choque/atasco: se cortan motores y turbina enseguida y se
+   * termina la carrera, para no seguir empujando a PWM maximo
+   * contra la pared (pico de corriente).
+   */
   if ((is_motor_pwm_saturated() || is_motor_angle_saturated()) && is_race_started()) {
     set_motors_speed(0, 0);
     set_fan_speed(0);
-    if (get_clock_ticks() - get_motors_saturated_ms() < 3000) {
-      blink_RGB_color(is_motor_pwm_saturated() ? 255 : 0, 0, is_motor_angle_saturated() ? 255 : 0, 50);
-    } else {
-      set_RGB_color(0, 0, 0);
-      set_race_started(false);
-    }
+    set_race_started(false);
     return;
-  }*/
+  }
   if (!is_race_started()) {
     if (race_finish_ms > 0 && get_clock_ticks() - race_finish_ms <= 3000) {
       set_motors_brake();
