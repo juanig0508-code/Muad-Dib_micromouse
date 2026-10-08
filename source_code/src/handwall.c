@@ -40,35 +40,38 @@ void handwall_start(void) {
   move(MOVE_START);
 }
 /*
- * Recuperacion cuando el robot cree estar encerrado.
+ * Callejon sin salida: giro de 180° en el lugar, hecho como dos
+ * giros de 90° con alineacion contra la pared en el medio.
  *
- * IMPORTANTE:
- * YA NO EXISTE NINGUN GIRO DE 180° EN HANDWALL.
+ *   1) Frena con rampa (no de golpe) en el lugar.
+ *   2) Se alinea contra la pared del frente (keep_front_distance).
+ *   3) Gira 90° hacia la pared del lado contrario al que sigue
+ *      (siguiendo la izquierda gira a derecha y viceversa).
+ *   4) Se alinea contra esa pared lateral y gira otros 90°.
  *
- * Si seguimos pared derecha:
- *   gira 90° a izquierda en el lugar.
- *
- * Si seguimos pared izquierda:
- *   gira 90° a derecha en el lugar.
- *
- * Despues vuelve a handwall_loop() y vuelve a leer los sensores.
+ * El heading objetivo se actualiza antes de cada giro para que el
+ * heading lock no pelee contra el giro.
  */
-static void handwall_recover_90(void)
+static void handwall_dead_end_u_turn(void)
 {
-  force_linear_speed(0);
-  set_ideal_angular_speed(0);
-  reset_control_errors();
+  float sign = use_left_hand ? 1.0f : -1.0f;
+  enum movement turn = use_left_hand ? MOVE_RIGHT_INPLACE : MOVE_LEFT_INPLACE;
 
-  if (use_left_hand) {
-    add_target_heading(PI / 2.0f);
-    move_inplace_turn(MOVE_RIGHT_INPLACE);
-  } else {
-    add_target_heading(-PI / 2.0f);
-    move_inplace_turn(MOVE_LEFT_INPLACE);
+  move_straight(0, 0, false, true);
+
+  disable_sensors_correction();
+  reset_control_errors();
+  keep_front_distance(MIDDLE_MAZE_DISTANCE, 150);
+
+  for (uint8_t i = 0; i < 2; i++) {
+    add_target_heading(sign * PI / 2.0f);
+    move_inplace_turn(turn);
+    set_ideal_angular_speed(0);
+    reset_control_errors();
+    if (i == 0) {
+      keep_front_distance(MIDDLE_MAZE_DISTANCE, 150);
+    }
   }
-
-  set_ideal_angular_speed(0);
-  reset_control_errors();
 }
 
 void handwall_loop(void) {
@@ -86,14 +89,11 @@ void handwall_loop(void) {
    * ENCERRADO / TRES PAREDES
    * ==========================================================
    *
-   * Antes:
-   *   MOVE_BACK_WALL -> 180°
-   *
    * Ahora:
-   *   solo 90° inplace y volver a medir.
+   *   dos giros de 90° en el lugar con alineacion intermedia.
    */
   if (walls.front && walls.left && walls.right) {
-    handwall_recover_90();
+    handwall_dead_end_u_turn();
     return;
   }
 
@@ -124,11 +124,7 @@ void handwall_loop(void) {
       return;
     }
 
-    /*
-     * Seguridad: si por alguna razon llegamos aca,
-     * solamente recuperar 90°. Nunca 180°.
-     */
-    handwall_recover_90();
+    handwall_dead_end_u_turn();
     return;
   }
 
@@ -158,8 +154,5 @@ void handwall_loop(void) {
     return;
   }
 
-  /*
-   * Seguridad: nunca ejecutar MOVE_BACK_WALL.
-   */
-  handwall_recover_90();
+  handwall_dead_end_u_turn();
 }
