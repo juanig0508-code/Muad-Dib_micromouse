@@ -14,7 +14,7 @@
 #define EEPROM_SECTOR 11
 #define EEPROM_BASE_ADDRESS (0x080E0000)
 
-#define DATA_LENGTH (2 + NUM_SENSORES + MAZE_CELLS + MENU_RUN_NUM_MODES + RC5_DATA_LENGTH + RC5_MAPPINGS_DATA_LENGTH)
+#define EEPROM_SECTOR_SIZE (128 * 1024)
 
 #define DATA_INDEX_GYRO_Z 0
 #define DATA_INDEX_SENSORS_OFFSETS (DATA_INDEX_GYRO_Z + MPU_DATA_LENGTH)
@@ -22,6 +22,13 @@
 #define DATA_INDEX_MENU_RUN (DATA_INDEX_MAZE + MAZE_CELLS)
 #define DATA_INDEX_RC5 (DATA_INDEX_MENU_RUN + MENU_RUN_NUM_MODES)
 #define DATA_INDEX_RC5_MAPPINGS (DATA_INDEX_RC5 + RC5_DATA_LENGTH)
+
+/*
+ * Largo total = fin del ultimo bloque. Antes se calculaba aparte
+ * con un "2" fijo para el giroscopo (MPU_DATA_LENGTH es 3) y el
+ * ultimo dato del mapeo IR quedaba fuera del arreglo.
+ */
+#define DATA_LENGTH (DATA_INDEX_RC5_MAPPINGS + RC5_MAPPINGS_DATA_LENGTH)
 
 void eeprom_save(void);
 void eeprom_load(void);

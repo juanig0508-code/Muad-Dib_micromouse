@@ -1,4 +1,8 @@
 #include "eeprom.h"
+#include "mpu6500.h"
+
+/* Cada int16 se graba como una palabra de 32 bits. */
+_Static_assert(DATA_LENGTH * 4 <= EEPROM_SECTOR_SIZE, "Los datos de EEPROM no entran en el sector");
 
 static int16_t eeprom_data[DATA_LENGTH];
 

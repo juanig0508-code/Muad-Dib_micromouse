@@ -266,8 +266,8 @@ uint8_t mpu6500_who_am_i(void) {
  *  - Recorre los fondos de escala y calcula el offset en cada
  *    uno (el offset crudo cambia con la escala).
  *  - Promedia 200 muestras con el robot quieto.
- *  - Guarda en EEPROM multiplicado por 1000 para conservar
- *    decimales en un int16.
+ *  - Guarda en EEPROM multiplicado por MPU_OFFSET_EEPROM_SCALE
+ *    para conservar decimales en un int16 (saturando si no entra).
  *
  * Se mantienen los 3 slots aunque el tercero (4000 dps) sea el
  * mismo que el segundo, para no correr el resto de los datos de
@@ -296,7 +296,15 @@ void mpu6500_gyro_z_calibration(void) {
 
     offset_z[i] = sum_z / 200.0f;
     printf("Offset Z for full-scale %d dps: %.4f\n", full_scale_dps[i], offset_z[i]);
-    eeprom_data[i] = offset_z[i] * 1000;
+    float scaled = roundf(offset_z[i] * MPU_OFFSET_EEPROM_SCALE);
+    if (scaled > INT16_MAX) {
+      scaled = INT16_MAX;
+      printf("[MPU6500] Offset fuera de rango, se satura al guardar\n");
+    } else if (scaled < INT16_MIN) {
+      scaled = INT16_MIN;
+      printf("[MPU6500] Offset fuera de rango, se satura al guardar\n");
+    }
+    eeprom_data[i] = (int16_t)scaled;
   }
 
   eeprom_set_data(DATA_INDEX_GYRO_Z, eeprom_data, MPU_DATA_LENGTH);
@@ -314,7 +322,7 @@ void mpu6500_load_eeprom(void) {
   int16_t *eeprom_data = eeprom_get_data();
 
   for (uint8_t i = 0; i < MPU_FULL_SCALE_COUNT; i++) {
-    offset_z[i] = eeprom_data[DATA_INDEX_GYRO_Z + i] / 1000.0f;
+    offset_z[i] = eeprom_data[DATA_INDEX_GYRO_Z + i] / MPU_OFFSET_EEPROM_SCALE;
     printf("Offset Z for full-scale %d dps: %.4f\n", full_scale_dps[i], offset_z[i]);
   }
 

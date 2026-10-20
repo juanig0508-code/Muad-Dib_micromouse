@@ -103,6 +103,19 @@ enum MPU_FULL_SCALE_DPS {
 
 
 /*
+ * Escala con la que se guarda el offset (en LSB) en la EEPROM,
+ * que es un arreglo de int16.
+ *
+ * El LSM6DSR usaba x1000, pero en el MPU6500 eso solo admite
+ * +/-32.7 LSB (~1 dps a 1000 dps) y el offset real del chip
+ * (hasta +/-5 dps segun la hoja de datos) desbordaba el int16.
+ * Con x100 entran +/-327 LSB (~10 dps a 1000 dps) con 0.01 LSB
+ * de resolucion.
+ */
+#define MPU_OFFSET_EEPROM_SCALE 100.0f
+
+
+/*
  * Signo del eje Z.
  *
  * Si al girar el robot el angulo integrado crece para el lado
