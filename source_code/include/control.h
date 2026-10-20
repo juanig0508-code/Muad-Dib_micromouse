@@ -60,6 +60,7 @@ void set_front_sensors_distance_correction(bool enabled);
 void set_front_sensors_diagonal_correction(bool enabled);
 void disable_sensors_correction(void);
 void reset_control_errors(void);
+void reset_angular_control_errors(void);
 void reset_control_speed(void);
 void reset_control_fan_speed(void);
 void reset_control_all(void);

@@ -25,7 +25,11 @@ void handwall_start(void) {
    */
   reset_heading_reference();
 
-  configure_kinematics(menu_run_get_speed());
+  /*
+   * Siempre SPEED_EXPLORE: es el unico perfil con giros de
+   * exploracion (MOVE_LEFT/MOVE_RIGHT) y sin turbina.
+   */
+  configure_kinematics(SPEED_EXPLORE);
 
   clear_info_leds();
   set_RGB_color(0, 0, 0);

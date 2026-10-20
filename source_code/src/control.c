@@ -496,6 +496,12 @@ void reset_control_errors(void) {
   last_angular_error = 0;
 }
 
+void reset_angular_control_errors(void) {
+  angular_error = 0;
+  sum_angular_error = 0;
+  last_angular_error = 0;
+}
+
 void reset_control_speed(void) {
   target_linear_speed = 0;
   ideal_linear_speed = 0;

@@ -88,6 +88,17 @@ enum ROBOT_VERSION {
 #define BATTERY_3S_HIGH_LIMIT_VOLTAGE 12.6
 #define BATTERY_3S_LOW_LIMIT_VOLTAGE 11.1
 
+/**
+ * Algoritmos heredados del ZoroBot3 (floodfill, time trial) y
+ * perfiles de velocidad rapidos (NORMAL..HAKI).
+ *
+ * No sirven para el reglamento LNR (meta unica desconocida,
+ * partida elegida por el jurado) y los perfiles rapidos no tienen
+ * giros de exploracion y prenden la turbina. Con 0, el menu se
+ * ignora en esas dos pantallas: siempre HANDWALL a SPEED_EXPLORE.
+ */
+#define LEGACY_ALGORITHMS_ENABLED 0
+
 /** Modo RUN */
 #define CONFIG_RUN_RACE 1
 #define CONFIG_RUN_DEBUG 0

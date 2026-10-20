@@ -305,11 +305,45 @@ void menu_run_reset(void) {
   valueRun[MODE_RACE] = RACE_DISARMED;
 }
 
+/**
+ * @brief Cantidad de valores posibles de cada pantalla del menu
+ */
+static uint8_t get_mode_values(uint8_t mode) {
+  switch (mode) {
+    case MODE_SPEED:
+      return MODE_SPEED_VALUES;
+    case MODE_RACE:
+      return RACE_ARMED_RIGHT + 1;
+    case MODE_EXPLORE_TYPE:
+      return MODE_EXPLORE_TYPE_VALUES;
+    case MODE_FLOODFILL_TYPE:
+      return MODE_FLOODFILL_TYPE_VALUES;
+    case MODE_MAZE_TYPE:
+      return MODE_MAZE_TYPE_VALUES;
+    case MODE_EXPLORE_ALGORITHM:
+      return MODE_EXPLORE_ALGORITHM_VALUES;
+    case MODE_SOLVE_STRATEGY:
+      return MODE_SOLVE_STRATEGY_VALUES;
+  }
+  return 1;
+}
+
 void menu_run_load_values(void) {
 #ifndef MMSIM_ENABLED
   int16_t *data = eeprom_get_data();
   for (uint16_t i = DATA_INDEX_MENU_RUN; i < (DATA_INDEX_MENU_RUN + MENU_RUN_NUM_MODES); i++) {
     valueRun[i - DATA_INDEX_MENU_RUN] = data[i];
+  }
+
+  /*
+   * Con la flash borrada (0xFFFF = -1) o datos viejos, un valor
+   * fuera de rango indexaria fuera de los arreglos (por ejemplo
+   * kinematics_settings[-1]). Se reemplaza por 0.
+   */
+  for (uint8_t mode = 0; mode < MENU_RUN_NUM_MODES; mode++) {
+    if (valueRun[mode] < 0 || valueRun[mode] >= get_mode_values(mode)) {
+      valueRun[mode] = 0;
+    }
   }
   valueRun[MODE_RACE] = RACE_DISARMED;
 #endif
@@ -338,28 +372,7 @@ void menu_run_up() {
     return;
   }
 
-  uint8_t mode_values = 0;
-  switch (modeRun) {
-    case MODE_SPEED:
-      mode_values = MODE_SPEED_VALUES;
-      break;
-    case MODE_EXPLORE_TYPE:
-      mode_values = MODE_EXPLORE_TYPE_VALUES;
-      break;
-    case MODE_FLOODFILL_TYPE:
-      mode_values = MODE_FLOODFILL_TYPE_VALUES;
-      break;
-    case MODE_MAZE_TYPE:
-      mode_values = MODE_MAZE_TYPE_VALUES;
-      break;
-    case MODE_EXPLORE_ALGORITHM:
-      mode_values = MODE_EXPLORE_ALGORITHM_VALUES;
-      break;
-    case MODE_SOLVE_STRATEGY:
-      mode_values = MODE_SOLVE_STRATEGY_VALUES;
-      break;
-  }
-  valueRun[modeRun] = (valueRun[modeRun] + 1) % mode_values;
+  valueRun[modeRun] = (valueRun[modeRun] + 1) % get_mode_values(modeRun);
 #endif
 }
 
@@ -418,7 +431,11 @@ int16_t *get_menu_run_values(void) {
 
 enum speed_strategy menu_run_get_speed(void) {
 #ifndef MMSIM_ENABLED
+#if LEGACY_ALGORITHMS_ENABLED
   return valueRun[MODE_SPEED];
+#else
+  return SPEED_EXPLORE;
+#endif
 #else
   return SPEED_HAKI;
 #endif
@@ -460,7 +477,11 @@ enum solve_strategy menu_run_get_solve_strategy(void) {
 
 enum explore_algorithm menu_run_get_explore_algorithm(void) {
 #ifndef MMSIM_ENABLED
+#if LEGACY_ALGORITHMS_ENABLED
   return valueRun[MODE_EXPLORE_ALGORITHM];
+#else
+  return EXPLORE_HANDWALL;
+#endif
 #else
   return EXPLORE_FLOODFILL;
 #endif
