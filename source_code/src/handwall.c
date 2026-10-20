@@ -43,21 +43,32 @@ void handwall_start(void) {
  * Callejon sin salida: giro de 180° en el lugar, hecho como dos
  * giros de 90° con alineacion contra la pared en el medio.
  *
- *   1) Frena con rampa (no de golpe) en el lugar.
- *   2) Se alinea contra la pared del frente (keep_front_distance).
- *   3) Gira 90° hacia la pared del lado contrario al que sigue
- *      (siguiendo la izquierda gira a derecha y viceversa).
- *   4) Se alinea contra esa pared lateral y gira otros 90°.
+ *   1) Frena con rampa (no de golpe).
+ *   2) Avanza por encoder hasta el centro de la celda (la pared del
+ *      fondo esta lejos para la deteccion frontal en mm, asi que
+ *      keep_front_distance() sola no alcanzaba a centrar).
+ *   3) Se alinea contra la pared del frente (keep_front_distance).
+ *   4) Gira 90° a lazo cerrado hacia la pared del lado contrario al
+ *      que sigue (siguiendo la izquierda gira a derecha y viceversa).
+ *   5) Se alinea contra esa pared lateral y gira otros 90°.
+ *   6) Retrocede hasta apoyar la cola en la pared del fondo y toma
+ *      esa posicion como referencia de celda, igual que en la
+ *      partida. Sin esto la siguiente decision quedaba corrida media
+ *      celda.
  *
- * El heading objetivo se actualiza antes de cada giro para que el
- * heading lock no pelee contra el giro.
+ * El heading objetivo se actualiza antes de cada giro: el giro va
+ * hasta ese objetivo y el heading lock no pelea contra el giro.
  */
 static void handwall_dead_end_u_turn(void)
 {
   float sign = use_left_hand ? 1.0f : -1.0f;
-  enum movement turn = use_left_hand ? MOVE_RIGHT_INPLACE : MOVE_LEFT_INPLACE;
 
   move_straight(0, 0, false, true);
+
+  int32_t to_center_mm = CELL_DIMENSION / 2 - get_current_cell_travelled_distance();
+  if (to_center_mm > 0) {
+    move_straight(to_center_mm, 300, false, true);
+  }
 
   disable_sensors_correction();
   reset_control_errors();
@@ -65,13 +76,13 @@ static void handwall_dead_end_u_turn(void)
 
   for (uint8_t i = 0; i < 2; i++) {
     add_target_heading(sign * PI / 2.0f);
-    move_inplace_turn(turn);
-    set_ideal_angular_speed(0);
-    reset_control_errors();
+    move_inplace_turn_to_target(sign > 0 ? 1 : -1);
     if (i == 0) {
       keep_front_distance(MIDDLE_MAZE_DISTANCE, 150);
     }
   }
+
+  move_back_to_wall();
 }
 
 void handwall_loop(void) {

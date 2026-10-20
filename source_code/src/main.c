@@ -288,18 +288,36 @@ static void selftest_end(void)
     set_race_started(false);
 }
 
-static void selftest_turn_90(void)
+/*
+ * Mismo giro en el lugar que usa el callejon sin salida (lazo
+ * cerrado hasta el heading objetivo). Imprime el error por UART.
+ */
+static void selftest_inplace_turn(float degrees)
 {
     selftest_begin();
-    move_inplace_angle(90.0f, SELFTEST_TURN_ANGULAR_SPEED_RADPS, SELFTEST_TURN_ANGULAR_DECEL_RADPS2);
+    configure_kinematics(SPEED_EXPLORE);
+    mpu6500_set_gyro_z_degrees(0);
+    add_target_heading(degrees * (float)PI / 180.0f);
+    move_inplace_turn_to_target(1);
+    delay(300);
+    float error_deg = get_heading_error() * 180.0f / (float)PI;
+    float gyro_deg = mpu6500_get_gyro_z_degrees();
     selftest_end();
+
+    printf("\n--- Autoprueba giro en el lugar %.0f deg ---\n", degrees);
+    printf("Error final segun heading lock: %.2f deg\n", error_deg);
+    printf("Giro medido por el giroscopo (1 kHz exacto): %.2f deg\n", gyro_deg);
+    printf("---\n");
+}
+
+static void selftest_turn_90(void)
+{
+    selftest_inplace_turn(90.0f);
 }
 
 static void selftest_turn_180(void)
 {
-    selftest_begin();
-    move_inplace_angle(180.0f, SELFTEST_TURN_ANGULAR_SPEED_RADPS, SELFTEST_TURN_ANGULAR_DECEL_RADPS2);
-    selftest_end();
+    selftest_inplace_turn(180.0f);
 }
 
 static void selftest_straight_100cm(void)

@@ -457,6 +457,23 @@ float get_target_heading(void) {
   return target_heading_rad;
 }
 
+/*
+ * Lo que falta girar para llegar al heading objetivo, en [-PI, PI].
+ * Positivo = hay que girar a derecha.
+ */
+float get_heading_error(void) {
+  return wrap_heading_angle(target_heading_rad - measured_heading_rad);
+}
+
+/*
+ * El robot quedo alineado fisicamente con el laberinto (por ejemplo,
+ * apoyado contra una pared): el heading objetivo pasa a ser la
+ * verdad y se descarta el error acumulado del giroscopo.
+ */
+void align_measured_heading_to_target(void) {
+  measured_heading_rad = target_heading_rad;
+}
+
 void set_front_sensors_angle_correction(bool enabled) {
   front_sensors_angle_correction_enabled = enabled;
 }

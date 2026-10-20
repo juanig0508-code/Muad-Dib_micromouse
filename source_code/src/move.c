@@ -1997,6 +1997,130 @@ void move_inplace_turn(enum movement movement) {
 #endif
 }
 
+/*
+ * Giro en el lugar a lazo cerrado hasta el heading objetivo
+ * (ver move_inplace_turn_to_target()). Aceleraciones mas suaves que
+ * turns_inplace (350 rad/s^2) para no saturar los motores ni golpear
+ * los engranajes.
+ */
+#define INPLACE_TARGET_MAX_ANGULAR_SPEED 6.0f
+#define INPLACE_TARGET_ANGULAR_ACCEL 60.0f
+#define INPLACE_TARGET_ANGULAR_DECEL 40.0f
+#define INPLACE_TARGET_TOLERANCE_RAD (1.0f * (float)PI / 180.0f)
+#define INPLACE_TARGET_TIMEOUT_MS 1500
+#define INPLACE_TARGET_SETTLE_MS 300
+
+/**
+ * @brief Gira en el lugar hasta alcanzar el heading objetivo del
+ * heading lock (add_target_heading() antes de llamar).
+ *
+ * Perfil trapezoidal en angulo: acelera hasta la velocidad maxima y
+ * frena a tiempo segun lo que falta, medido con el giroscopo. Al
+ * final deja w = 0 y espera a que el heading lock corrija el resto.
+ *
+ * @param direction +1 derecha, -1 izquierda. Fuerza el sentido
+ * cuando falta ~180° y el error podria tener cualquier signo.
+ */
+void move_inplace_turn_to_target(int8_t direction) {
+#ifndef MMSIM_ENABLED
+  set_target_linear_speed(0);
+
+  uint32_t start_ms = get_clock_ticks();
+  uint32_t last_ms = start_ms;
+  float angular_speed = 0.0f;
+
+  while (is_race_started() && !is_motor_saturated() && get_clock_ticks() - start_ms < INPLACE_TARGET_TIMEOUT_MS) {
+    uint32_t now = get_clock_ticks();
+    if (now == last_ms) {
+      continue;
+    }
+    float dt = (now - last_ms) / 1000.0f;
+    last_ms = now;
+
+    float remaining = get_heading_error();
+    if (remaining * direction < 0 && fabsf(remaining) > (float)PI / 2.0f) {
+      remaining += direction * 2.0f * (float)PI;
+    }
+    if (fabsf(remaining) < INPLACE_TARGET_TOLERANCE_RAD) {
+      break;
+    }
+
+    float brake_speed = sqrtf(2.0f * INPLACE_TARGET_ANGULAR_DECEL * fabsf(remaining));
+    angular_speed += INPLACE_TARGET_ANGULAR_ACCEL * dt;
+    if (angular_speed > INPLACE_TARGET_MAX_ANGULAR_SPEED) {
+      angular_speed = INPLACE_TARGET_MAX_ANGULAR_SPEED;
+    }
+    if (angular_speed > brake_speed) {
+      angular_speed = brake_speed;
+    }
+    set_ideal_angular_speed(remaining > 0 ? angular_speed : -angular_speed);
+  }
+  set_ideal_angular_speed(0);
+
+  uint32_t settle_ms = get_clock_ticks();
+  while (is_race_started() && !is_motor_saturated() && get_clock_ticks() - settle_ms < INPLACE_TARGET_SETTLE_MS &&
+         fabsf(get_heading_error()) > INPLACE_TARGET_TOLERANCE_RAD) {
+  }
+  reset_control_errors();
+#endif
+}
+
+#define BACK_TO_WALL_SPEED 100
+#define BACK_TO_WALL_EXTRA_MM 20
+#define BACK_TO_WALL_TIMEOUT_MS 2000
+#define BACK_TO_WALL_STALL_SPEED 20
+#define BACK_TO_WALL_STALL_MS 100
+
+/**
+ * @brief Retrocede hasta apoyar la cola en la pared de atras y toma
+ * esa posicion como referencia (set_starting_position()).
+ *
+ * Termina cuando el robot se frena contra la pared (velocidad ~0
+ * durante BACK_TO_WALL_STALL_MS), al recorrer la distancia teorica
+ * mas BACK_TO_WALL_EXTRA_MM, o por timeout. Si se freno contra la
+ * pared, el robot quedo alineado con ella y se descarta el error de
+ * heading acumulado.
+ */
+void move_back_to_wall(void) {
+#ifndef MMSIM_ENABLED
+  float max_distance_mm = (CELL_DIMENSION - WALL_WIDTH) / 2.0f - ROBOT_BACK_LENGTH + BACK_TO_WALL_EXTRA_MM;
+  int32_t start_micrometers = get_encoder_avg_micrometers();
+  uint32_t start_ms = get_clock_ticks();
+  uint32_t stalled_since_ms = 0;
+  bool stalled = false;
+
+  disable_sensors_correction();
+  set_check_motors_saturated_enabled(false);
+  set_ideal_angular_speed(0);
+  set_target_linear_speed(-BACK_TO_WALL_SPEED);
+
+  while (is_race_started() && get_clock_ticks() - start_ms < BACK_TO_WALL_TIMEOUT_MS &&
+         (start_micrometers - get_encoder_avg_micrometers()) < max_distance_mm * MICROMETERS_PER_MILLIMETER) {
+    if (get_clock_ticks() - start_ms > 200 && fabsf(get_encoder_avg_speed()) < BACK_TO_WALL_STALL_SPEED) {
+      if (stalled_since_ms == 0) {
+        stalled_since_ms = get_clock_ticks();
+      } else if (get_clock_ticks() - stalled_since_ms >= BACK_TO_WALL_STALL_MS) {
+        stalled = true;
+        break;
+      }
+    } else {
+      stalled_since_ms = 0;
+    }
+  }
+
+  set_target_linear_speed(0);
+  while (is_race_started() && get_ideal_linear_speed() != 0) {
+  }
+  reset_control_errors();
+  set_check_motors_saturated_enabled(true);
+
+  set_starting_position();
+  if (stalled) {
+    align_measured_heading_to_target();
+  }
+#endif
+}
+
 /**
  * @brief Movimiento de giro en el sitio paramétrico
  *
@@ -2009,7 +2133,7 @@ void move_inplace_angle(float angle, float rads, float angular_decel) {
   float current_angle = mpu6500_get_gyro_z_degrees();
   float target_angle = current_angle + angle;
   if (target_angle > 360.0) {
-    target_angle = 360.0 - target_angle;
+    target_angle = target_angle - 360.0;
   } else if (target_angle < -360) {
     target_angle = 360.0 + target_angle;
   }
