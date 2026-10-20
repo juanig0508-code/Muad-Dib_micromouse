@@ -44,6 +44,74 @@ const float ln_lookup[LOG_LINEARIZATION_TABLE_SIZE] = {
 
 static volatile int16_t last_front_sensors_angle_error = 0;
 
+/*
+ * ============================================================
+ * DETECCION DE PAREDES PARA NAVEGACION (RAW)
+ * ============================================================
+ *
+ * Para decidir si hay pared (get_walls(), handwall, perdida de
+ * pared) se usa el raw (on - off) filtrado de cada sensor, no la
+ * distancia en mm.
+ *
+ * Cada sensor tiene dos umbrales (histeresis):
+ *   - DETECT:  el raw filtrado sube por encima -> hay pared
+ *   - RELEASE: el raw filtrado baja por debajo -> no hay pared
+ * Entre los dos se mantiene el ultimo estado, para que el ruido o
+ * una lectura justo en el umbral no cambie la decision.
+ *
+ * Mediciones publicadas (.docx §5), A REPETIR con los sensores ya
+ * reparados y con el eje en el borde de celda (punto de decision):
+ *
+ *                       despejado    pared
+ *   lateral izquierdo      ~135     ~300-335 (centrado)
+ *   lateral derecho        ~230     ~510-545 (centrado)
+ *   frontal izquierdo       ~31     ~114 (a una celda)
+ *   frontal derecho         ~65     ~193 (a una celda)
+ *
+ * OJO (ISSUES L-04): los DETECT frontales (180/280) quedan POR
+ * ENCIMA de "pared a una celda" de esa tabla. Si la tabla sigue
+ * valiendo, la pared del frente no se detecta en el punto de
+ * decision. Medir con Config -> Debug -> Sensores (UP = raw).
+ *
+ * OJO (ISSUES L-25): el izquierdo queda al ~52 % entre despejado
+ * y pared y el derecho al ~39 %. Con el robot ~20 mm lejos de la
+ * pared el raw cae ~1/3 y el izquierdo puede dar apertura falsa.
+ *
+ * DETECT son los umbrales unicos que habia antes. RELEASE queda
+ * SENSOR_NAV_RAW_HYSTERESIS por debajo: una pared ya vista se
+ * sigue considerando presente hasta que el raw cae claramente.
+ */
+#define SENSOR_FRONT_LEFT_NAV_RAW_DETECT  180U
+#define SENSOR_FRONT_RIGHT_NAV_RAW_DETECT 280U
+#define SENSOR_SIDE_LEFT_NAV_RAW_DETECT   220U
+#define SENSOR_SIDE_RIGHT_NAV_RAW_DETECT  340U
+
+#define SENSOR_NAV_RAW_HYSTERESIS 0.85f
+
+/*
+ * Filtro exponencial del raw de navegacion, a 1 kHz.
+ * 0.3 -> constante de tiempo ~3 ms (~2 mm a 600 mm/s).
+ */
+#define SENSOR_NAV_RAW_FILTER_ALPHA 0.3f
+
+static const uint16_t sensors_nav_detect[NUM_SENSORES] = {
+    [SENSOR_FRONT_LEFT_WALL_ID] = SENSOR_FRONT_LEFT_NAV_RAW_DETECT,
+    [SENSOR_FRONT_RIGHT_WALL_ID] = SENSOR_FRONT_RIGHT_NAV_RAW_DETECT,
+    [SENSOR_SIDE_LEFT_WALL_ID] = SENSOR_SIDE_LEFT_NAV_RAW_DETECT,
+    [SENSOR_SIDE_RIGHT_WALL_ID] = SENSOR_SIDE_RIGHT_NAV_RAW_DETECT,
+};
+
+static const uint16_t sensors_nav_release[NUM_SENSORES] = {
+    [SENSOR_FRONT_LEFT_WALL_ID] = (uint16_t)(SENSOR_FRONT_LEFT_NAV_RAW_DETECT * SENSOR_NAV_RAW_HYSTERESIS),
+    [SENSOR_FRONT_RIGHT_WALL_ID] = (uint16_t)(SENSOR_FRONT_RIGHT_NAV_RAW_DETECT * SENSOR_NAV_RAW_HYSTERESIS),
+    [SENSOR_SIDE_LEFT_WALL_ID] = (uint16_t)(SENSOR_SIDE_LEFT_NAV_RAW_DETECT * SENSOR_NAV_RAW_HYSTERESIS),
+    [SENSOR_SIDE_RIGHT_WALL_ID] = (uint16_t)(SENSOR_SIDE_RIGHT_NAV_RAW_DETECT * SENSOR_NAV_RAW_HYSTERESIS),
+};
+
+static volatile float sensors_raw_nav[NUM_SENSORES];
+static volatile bool sensors_wall_detected[NUM_SENSORES];
+static volatile bool sensors_nav_initialized = false;
+
 void set_sensors_robot_calibration(uint16_t version) {
   switch (version) {
     case ZOROBOT3_A:
@@ -341,111 +409,101 @@ bool right_wall_detection(void) {
 }
 
 /*
- * ============================================================
- * DETECCION FRONTAL
- * ============================================================
- *
- * front_wall_detection():
- *   Se conserva para las rutinas que trabajan con la distancia
- *   convertida (alineacion, control frontal, etc.).
- *
- * front_wall_navigation_detection():
- *   Se usa especificamente para decidir la navegacion del
- *   laberinto. Ademas de la distancia convertida, mira el RAW
- *   de los dos sensores frontales.
- *
- * En las mediciones reales del robot obtuvimos aproximadamente:
- *
- *                    FL raw     FR raw
- *   frente despejado    31         65
- *   pared ~1 celda     114        193
- *
- * Por eso elegimos umbrales intermedios, algo desplazados hacia
- * abajo para detectar la pared antes:
- *
- *   FL >= 70
- *   FR >= 120
- *
- * Si luego hace falsas detecciones, estos son los dos valores
- * que hay que subir ligeramente.
+ * front_wall_detection() trabaja con la distancia convertida y se
+ * conserva para las rutinas de alineacion y control frontal.
+ * Para navegacion se usa get_walls() (raw con histeresis).
  */
-#define SENSOR_FRONT_LEFT_NAV_RAW_DETECTION  180U
-#define SENSOR_FRONT_RIGHT_NAV_RAW_DETECTION 280U
-
 bool front_wall_detection(void) {
   return (sensors_distance[SENSOR_FRONT_LEFT_WALL_ID] < SENSOR_FRONT_DETECTION) ||
          (sensors_distance[SENSOR_FRONT_RIGHT_WALL_ID] < SENSOR_FRONT_DETECTION);
 }
 
-/*
- * Deteccion frontal robusta para HANDWALL.
+/**
+ * @brief Convierte el raw filtrado (on - off) de un sensor a mm.
  *
- * Basta con que:
- *   - la conversion de distancia detecte pared, O
- *   - cualquiera de los dos sensores RAW detecte reflexion
- *     suficiente.
+ * Las magias vienen dadas por un script de python que calcula los
+ * valores ABC de la ecuación que caracteriza al sensor. A mayores,
+ * se aplica un offset calibrado mediante menú.
  *
- * De esta forma un error de la conversion raw->mm no hace que
- * el robot crea que tiene el frente libre y avance contra una
- * pared.
+ * Se calcula en int32 y se limita al final: antes se limitaba a 0
+ * antes de sumar el largo del robot y el offset, y con un offset
+ * negativo el resultado "daba la vuelta" a ~65500 en el uint16.
  */
-static bool front_wall_navigation_detection(void) {
-  uint16_t front_left_raw =
-      get_sensor_raw_filter(SENSOR_FRONT_LEFT_WALL_ID);
+static uint16_t sensor_raw_to_distance(uint8_t sensor, uint16_t raw) {
+  if (raw == 0) {
+    return SENSOR_DISTANCE_MAX;
+  }
 
-  uint16_t front_right_raw =
-      get_sensor_raw_filter(SENSOR_FRONT_RIGHT_WALL_ID);
+  int32_t ln_index = ((int32_t)raw + (int32_t)sensors_distance_calibrations[sensor].c) / LOG_LINEARIZATION_TABLE_STEP;
+  if (ln_index < 0) {
+    ln_index = 0;
+  } else if (ln_index >= LOG_LINEARIZATION_TABLE_SIZE) {
+    ln_index = LOG_LINEARIZATION_TABLE_SIZE - 1;
+  }
+  float ln = ln_lookup[ln_index];
+  int32_t distance = (int32_t)((sensors_distance_calibrations[sensor].a / ln - sensors_distance_calibrations[sensor].b) * 1000.0f);
+  if (distance < 0) {
+    distance = 0;
+  }
 
-  /*
-   * IMPORTANTE:
-   * Para NAVEGACION no usamos la distancia convertida.
-   * En nuestras pruebas la conversion raw->mm tuvo valores
-   * saturados/invalidos y cambiar los thresholds RAW no alteraba
-   * el comportamiento porque front_wall_detection() seguia
-   * entrando por el otro lado del OR.
-   */
-  return
-      (front_left_raw >= SENSOR_FRONT_LEFT_NAV_RAW_DETECTION) ||
-      (front_right_raw >= SENSOR_FRONT_RIGHT_NAV_RAW_DETECTION);
+  switch (sensor) {
+    case SENSOR_FRONT_LEFT_WALL_ID:
+    case SENSOR_FRONT_RIGHT_WALL_ID:
+      distance += ROBOT_FRONT_LENGTH;
+      break;
+    case SENSOR_SIDE_LEFT_WALL_ID:
+    case SENSOR_SIDE_RIGHT_WALL_ID:
+      distance += ROBOT_MIDDLE_WIDTH;
+      break;
+  }
+  distance += sensors_distance_offset[sensor];
+
+  if (distance < 0) {
+    distance = 0;
+  } else if (distance > SENSOR_DISTANCE_MAX) {
+    distance = SENSOR_DISTANCE_MAX;
+  }
+  return (uint16_t)distance;
 }
 
 /**
- * @brief Las magias de los sensores vienen dadas por un script de python que calcula los valores ABC de la ecuación que los caracteriza.
- * TODO: A mayores, se aplica un offset al valor calculado de las distancias, calibrado mediante menú.
+ * @brief Filtra el raw de navegacion y actualiza la deteccion de
+ * pared con histeresis (ver umbrales mas abajo).
+ */
+static void update_wall_navigation(uint8_t sensor, uint16_t raw) {
+  if (!sensors_nav_initialized) {
+    sensors_raw_nav[sensor] = raw;
+    sensors_wall_detected[sensor] = raw >= sensors_nav_detect[sensor];
+    return;
+  }
+  sensors_raw_nav[sensor] = SENSOR_NAV_RAW_FILTER_ALPHA * raw + (1.0f - SENSOR_NAV_RAW_FILTER_ALPHA) * sensors_raw_nav[sensor];
+
+  if (sensors_wall_detected[sensor]) {
+    if (sensors_raw_nav[sensor] < sensors_nav_release[sensor]) {
+      sensors_wall_detected[sensor] = false;
+    }
+  } else {
+    if (sensors_raw_nav[sensor] >= sensors_nav_detect[sensor]) {
+      sensors_wall_detected[sensor] = true;
+    }
+  }
+}
+
+/**
+ * @brief Se llama a 1 kHz desde el SysTick
  */
 void update_sensors_magics(void) {
   if (!sensors_enabled) {
+    sensors_nav_initialized = false;
     return;
   }
   for (uint8_t sensor = 0; sensor < NUM_SENSORES; sensor++) {
-    if (sensors_on[sensor] > sensors_off[sensor]) {
-      sensors_raw[sensor] = sensors_on[sensor] - sensors_off[sensor];
-
-      int16_t ln_index = (sensors_raw[sensor] + sensors_distance_calibrations[sensor].c) / 4;
-      if (ln_index < 0) {
-        ln_index = 0;
-      }
-      float ln = ln_lookup[ln_index];
-      int16_t new_sensor_distance = (int16_t)((sensors_distance_calibrations[sensor].a / ln - sensors_distance_calibrations[sensor].b) * 1000.0f);
-      if (new_sensor_distance < 0) {
-        new_sensor_distance = 0;
-      }
-
-      switch (sensor) {
-        case SENSOR_FRONT_LEFT_WALL_ID:
-        case SENSOR_FRONT_RIGHT_WALL_ID:
-          new_sensor_distance += ROBOT_FRONT_LENGTH;
-          break;
-        case SENSOR_SIDE_LEFT_WALL_ID:
-        case SENSOR_SIDE_RIGHT_WALL_ID:
-          new_sensor_distance += ROBOT_MIDDLE_WIDTH;
-          break;
-      }
-      new_sensor_distance += sensors_distance_offset[sensor];
-      // sensors_distance[sensor] = 0.1f * new_sensor_distance + (1 - 0.1f) * sensors_distance[sensor];
-      sensors_distance[sensor] = new_sensor_distance;
-    }
+    uint16_t raw = sensors_on[sensor] > sensors_off[sensor] ? sensors_on[sensor] - sensors_off[sensor] : 0;
+    sensors_raw[sensor] = raw;
+    sensors_distance[sensor] = sensor_raw_to_distance(sensor, raw);
+    update_wall_navigation(sensor, raw);
   }
+  sensors_nav_initialized = true;
 }
 
 void update_side_sensors_leds(void) {
@@ -538,41 +596,11 @@ uint16_t get_front_wall_distance(void) {
 }
 
 
-/*
- * ============================================================
- * DETECCION LATERAL PARA NAVEGACION (RAW)
- * ============================================================
- *
- * Mediciones reales:
- *
- *                     IZQ raw     DER raw
- *   pared, centrado      301-334     508-545
- *   pared, desplazado       367          367
- *   lateral despejado       135          230
- *
- * Hay una separacion suficientemente clara para usar el RAW
- * filtrado al decidir si existe una apertura.
- *
- * Estos thresholds NO controlan el centrado del robot.
- * Solo sirven para get_walls()/Handwall.
- */
-/*
- * Umbrales ubicados en la misma posicion relativa (~40%) entre
- * "lateral despejado" y "pared centrado" de cada sensor. El raw
- * derecho lee ~1.6 veces el izquierdo, por eso no pueden ser
- * numericamente iguales.
- */
-#define SENSOR_SIDE_LEFT_NAV_RAW_WALL_DETECTION   220U
-#define SENSOR_SIDE_RIGHT_NAV_RAW_WALL_DETECTION  340U
-
-static bool left_wall_navigation_detection(void) {
-  return get_sensor_raw_filter(SENSOR_SIDE_LEFT_WALL_ID) >=
-         SENSOR_SIDE_LEFT_NAV_RAW_WALL_DETECTION;
-}
-
-static bool right_wall_navigation_detection(void) {
-  return get_sensor_raw_filter(SENSOR_SIDE_RIGHT_WALL_ID) >=
-         SENSOR_SIDE_RIGHT_NAV_RAW_WALL_DETECTION;
+uint16_t get_sensor_raw_nav(uint8_t pos) {
+  if (pos < NUM_SENSORES) {
+    return (uint16_t)sensors_raw_nav[pos];
+  }
+  return 0;
 }
 
 struct walls get_walls(void) {
@@ -586,16 +614,17 @@ struct walls get_walls(void) {
 #endif
 
   /*
-   * Para NAVEGACION usamos solamente los RAW filtrados.
+   * Para NAVEGACION usamos solamente los RAW filtrados con
+   * histeresis (ver update_wall_navigation()).
    *
    * Esto separa dos cosas:
    *   - navegacion: detectar pared/apertura de forma robusta
    *   - control: usar las distancias convertidas para seguir
    *     suavemente la pared elegida
    */
-  walls.front = front_wall_navigation_detection();
-  walls.left = left_wall_navigation_detection();
-  walls.right = right_wall_navigation_detection();
+  walls.front = sensors_wall_detected[SENSOR_FRONT_LEFT_WALL_ID] || sensors_wall_detected[SENSOR_FRONT_RIGHT_WALL_ID];
+  walls.left = sensors_wall_detected[SENSOR_SIDE_LEFT_WALL_ID];
+  walls.right = sensors_wall_detected[SENSOR_SIDE_RIGHT_WALL_ID];
   return walls;
 }
 

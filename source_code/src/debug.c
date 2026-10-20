@@ -25,6 +25,11 @@ static void debug_sensors_raw(void) {
     printf("FL: %4d - %4d = %4d ", get_sensor_raw(SENSOR_FRONT_LEFT_WALL_ID, 1), get_sensor_raw(SENSOR_FRONT_LEFT_WALL_ID, 0), get_sensor_raw_filter(SENSOR_FRONT_LEFT_WALL_ID));
     printf("FR: %4d - %4d = %4d ", get_sensor_raw(SENSOR_FRONT_RIGHT_WALL_ID, 1), get_sensor_raw(SENSOR_FRONT_RIGHT_WALL_ID, 0), get_sensor_raw_filter(SENSOR_FRONT_RIGHT_WALL_ID));
     printf("SR: %4d - %4d = %4d ", get_sensor_raw(SENSOR_SIDE_RIGHT_WALL_ID, 1), get_sensor_raw(SENSOR_SIDE_RIGHT_WALL_ID, 0), get_sensor_raw_filter(SENSOR_SIDE_RIGHT_WALL_ID));
+    struct walls walls = get_walls();
+    printf("| NAV SL: %4d FL: %4d FR: %4d SR: %4d | L:%d F:%d R:%d",
+           get_sensor_raw_nav(SENSOR_SIDE_LEFT_WALL_ID), get_sensor_raw_nav(SENSOR_FRONT_LEFT_WALL_ID),
+           get_sensor_raw_nav(SENSOR_FRONT_RIGHT_WALL_ID), get_sensor_raw_nav(SENSOR_SIDE_RIGHT_WALL_ID),
+           walls.left ? 1 : 0, walls.front ? 1 : 0, walls.right ? 1 : 0);
     printf("\n");
     last_print_debug = get_clock_ticks();
   }

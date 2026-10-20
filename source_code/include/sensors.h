@@ -37,6 +37,9 @@
 #define AUX_CURRENT_RIGHT_ID 1
 #define AUX_MENU_BTN_ID 3
 
+/* Distancia que se informa cuando no hay reflejo o la curva satura */
+#define SENSOR_DISTANCE_MAX 1000
+
 #define NUM_SENSORES 4
 #define SENSOR_FRONT_LEFT_WALL_ID 0
 #define SENSOR_FRONT_RIGHT_WALL_ID 1
@@ -83,6 +86,7 @@ void sensors_load_eeprom(void);
 
 uint16_t get_sensor_raw(uint8_t pos, bool on);
 uint16_t get_sensor_raw_filter(uint8_t pos);
+uint16_t get_sensor_raw_nav(uint8_t pos);
 
 bool left_wall_detection(void);
 bool right_wall_detection(void);
