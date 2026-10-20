@@ -16,6 +16,7 @@
 void set_motors_enable(bool enabled);
 void set_motors_speed(float velI, float velD);
 void set_motors_brake(void);
+void set_motors_soft_brake(float duty);
 void set_motors_pwm(int32_t pwm_left, int32_t pwm_right);
 void set_fan_speed(uint8_t vel);
 

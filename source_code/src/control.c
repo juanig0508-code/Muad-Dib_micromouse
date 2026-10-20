@@ -8,6 +8,12 @@ static volatile uint32_t sensor_front_right_start_ms = 0;
 
 static volatile bool control_debug = false;
 
+static volatile enum race_end_reason race_end_reason = RACE_END_NONE;
+
+/* Frenado al terminar la carrera: rampa del freno parcial al total */
+#define SOFT_STOP_RAMP_MS 300
+#define SOFT_STOP_MIN_DUTY 0.2f
+
 static volatile int32_t target_linear_speed = 0;
 static volatile int32_t ideal_linear_speed = 0;
 static volatile float ideal_angular_speed = 0.0;
@@ -340,6 +346,17 @@ void set_race_started(bool state) {
 #endif
 }
 
+/*
+ * Motivo por el que termino la ultima carrera, si no fue normal.
+ * Lo consume main() para avisar con LEDs y por UART (desde la ISR
+ * no se puede).
+ */
+enum race_end_reason consume_race_end_reason(void) {
+  enum race_end_reason reason = race_end_reason;
+  race_end_reason = RACE_END_NONE;
+  return reason;
+}
+
 bool is_race_auto_run(void) {
   return race_auto_run;
 }
@@ -583,11 +600,19 @@ void control_loop(void) {
   if ((is_motor_pwm_saturated() || is_motor_angle_saturated()) && is_race_started()) {
     set_motors_speed(0, 0);
     set_fan_speed(0);
+    race_end_reason = is_motor_pwm_saturated() ? RACE_END_SATURATION_PWM : RACE_END_SATURATION_ANGLE;
     set_race_started(false);
     return;
   }
   if (!is_race_started()) {
-    if (race_finish_ms > 0 && get_clock_ticks() - race_finish_ms <= 3000) {
+    uint32_t since_finish_ms = get_clock_ticks() - race_finish_ms;
+    if (race_finish_ms > 0 && since_finish_ms <= SOFT_STOP_RAMP_MS) {
+      /*
+       * Frenar en corto de golpe desde 600 mm/s es un pico de par
+       * sobre los engranajes: el freno sube en rampa.
+       */
+      set_motors_soft_brake(SOFT_STOP_MIN_DUTY + (1.0f - SOFT_STOP_MIN_DUTY) * since_finish_ms / SOFT_STOP_RAMP_MS);
+    } else if (race_finish_ms > 0 && since_finish_ms <= 3000) {
       set_motors_brake();
     } else {
       set_motors_speed(0, 0);

@@ -315,6 +315,12 @@ void menu_run_load_values(void) {
 #endif
 }
 
+/*
+ * Copia los valores del menu a la EEPROM y la graba. Se llama solo
+ * desde Calibracion -> guardar EEPROM: grabar borra un sector de
+ * flash (~1-2 s con todas las interrupciones congeladas), asi que
+ * no se hace al armar el lado.
+ */
 void menu_run_save_values(void) {
 #ifndef MMSIM_ENABLED
   eeprom_set_data(DATA_INDEX_MENU_RUN, valueRun, MENU_RUN_NUM_MODES);
@@ -334,7 +340,6 @@ void menu_run_up() {
    */
   if (modeRun == MODE_RACE) {
     valueRun[MODE_RACE] = RACE_ARMED_LEFT;
-    menu_run_save_values();
     return;
   }
 
@@ -371,7 +376,6 @@ void menu_run_down() {
   if (modeRun == MODE_RACE) {
 #ifndef MMSIM_ENABLED
     valueRun[MODE_RACE] = RACE_ARMED_RIGHT;
-    menu_run_save_values();
 #endif
     return;
   }
@@ -398,7 +402,6 @@ void menu_run_select_left_hand(void) {
 #ifndef MMSIM_ENABLED
   if (modeRun == MODE_RACE) {
     valueRun[MODE_RACE] = RACE_ARMED_LEFT;
-    menu_run_save_values();
   }
 #endif
 }
@@ -407,7 +410,6 @@ void menu_run_select_right_hand(void) {
 #ifndef MMSIM_ENABLED
   if (modeRun == MODE_RACE) {
     valueRun[MODE_RACE] = RACE_ARMED_RIGHT;
-    menu_run_save_values();
   }
 #endif
 }

@@ -85,6 +85,25 @@ void set_motors_speed(float velI, float velD) {
   // printf("%ld - %ld\n", (uint32_t)ocI, (uint32_t)ocD);
 }
 
+/**
+ * @brief Freno parcial: cada motor alterna entre freno (IN1 = IN2 = 1)
+ * y libre (IN1 = IN2 = 0) con el ciclo de trabajo indicado.
+ *
+ * @param duty 0 = libre, 1 = freno en corto completo
+ */
+void set_motors_soft_brake(float duty) {
+  if (duty < 0) {
+    duty = 0;
+  } else if (duty > 1) {
+    duty = 1;
+  }
+  uint32_t oc = (uint32_t)(duty * MOTORES_MAX_PWM);
+  timer_set_oc_value(TIM8, TIM_OC1, oc);
+  timer_set_oc_value(TIM8, TIM_OC2, oc);
+  timer_set_oc_value(TIM8, TIM_OC3, oc);
+  timer_set_oc_value(TIM8, TIM_OC4, oc);
+}
+
 void set_motors_brake(void) {
   timer_set_oc_value(TIM8, TIM_OC1, MOTORES_MAX_PWM);
   timer_set_oc_value(TIM8, TIM_OC2, MOTORES_MAX_PWM);

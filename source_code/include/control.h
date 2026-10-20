@@ -32,6 +32,14 @@ enum wall_follow_side {
   WALL_FOLLOW_RIGHT
 };
 
+enum race_end_reason {
+  RACE_END_NONE = 0,
+  RACE_END_SATURATION_PWM,
+  RACE_END_SATURATION_ANGLE,
+};
+
+enum race_end_reason consume_race_end_reason(void);
+
 bool is_race_started(void);
 void set_race_started(bool state);
 bool is_race_auto_run(void);

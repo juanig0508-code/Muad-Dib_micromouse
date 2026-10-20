@@ -31,7 +31,7 @@ void calibrate_from_config(uint8_t type) {
         front_sensors_calibration();
         break;
       case CALIBRATE_STORE_EEPROM:
-        eeprom_save();
+        menu_run_save_values();
         break;
       case CALIBRATE_IR_REMOTE:
         rc5_mappings_learn();

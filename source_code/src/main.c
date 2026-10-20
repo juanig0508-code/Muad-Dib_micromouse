@@ -12,6 +12,7 @@
 #include <move.h>
 #include <timetrial.h>
 
+#include <diagnostics.h>
 #include <mpu6500.h>
 #include <rc5.h>
 #include <sensors.h>
@@ -357,6 +358,34 @@ static void check_selftest_buttons(void)
 
 
 /*
+ * Fin de carrera por saturacion: los 10 LEDs parpadean 5 veces
+ * (PWM saturado) o la fila de arriba sola (velocidad angular).
+ */
+static void report_race_end(enum race_end_reason reason)
+{
+    if (reason == RACE_END_NONE) {
+        return;
+    }
+
+    printf("Fin de carrera por saturacion de %s\n",
+           reason == RACE_END_SATURATION_PWM ? "PWM (choque/atasco)" : "velocidad angular");
+
+    for (uint8_t i = 0; i < 5; i++) {
+        if (reason == RACE_END_SATURATION_PWM) {
+            set_info_leds();
+        } else {
+            for (uint8_t led = 0; led < 5; led++) {
+                set_info_led(led, true);
+            }
+        }
+        delay(100);
+        clear_info_leds();
+        delay(100);
+    }
+}
+
+
+/*
  * ============================================================
  * MAIN
  * ============================================================
@@ -430,6 +459,14 @@ int main(void)
 
 
     /*
+     * Causa del ultimo reset (UART y, si no fue un encendido
+     * normal, un LED durante 1.5 s). Ver diagnostics.c.
+     */
+
+    show_reset_cause();
+
+
+    /*
      * Información inicial por UART.
      */
 
@@ -484,6 +521,15 @@ int main(void)
 
         if (!is_race_started())
         {
+
+            /*
+             * Si la carrera termino por saturacion de motores
+             * (choque/atasco), avisarlo: si no, al volver al menu
+             * parece que el robot se reinicio.
+             */
+
+            report_race_end(consume_race_end_reason());
+
 
             /*
              * Gestion del menu mediante botones.
