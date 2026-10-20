@@ -53,6 +53,9 @@ void reset_heading_reference(void);
 void add_target_heading(float radians);
 float get_measured_heading(void);
 float get_target_heading(void);
+float get_heading_error(void);
+void align_measured_heading_to_target(void);
+void set_heading_lock_enabled(bool enabled);
 
 void set_front_sensors_angle_correction(bool enabled);
 bool is_front_sensors_angle_correction_enabled(void);

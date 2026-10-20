@@ -39,18 +39,18 @@ static volatile bool side_sensors_correction_enabled = false;
  *
  * Estos valores son deliberadamente faciles de ajustar.
  *
- * Los targets salen de las mediciones reales tomadas con el
- * robot aproximadamente centrado:
- *
- *   sensor izquierdo ~141 mm
- *   sensor derecho   ~137 mm
+ * El objetivo es la distancia del robot centrado en el pasillo,
+ * la misma que usa la calibracion lateral (side_sensors_calibration
+ * ajusta el offset para que centrado lea MIDDLE_MAZE_DISTANCE).
+ * Antes era 130 mm fijo y con celdas de 260 mm (centro = 124 mm)
+ * dejaba el robot ~6 mm corrido.
  *
  * El sensor lateral NO aplica voltaje directamente a motores.
  * Genera una velocidad angular deseada pequeña y limitada.
  * El PID angular + MPU se encarga de ejecutarla.
  */
-#define WALL_FOLLOW_LEFT_TARGET_MM   130.0f
-#define WALL_FOLLOW_RIGHT_TARGET_MM  130.0f
+#define WALL_FOLLOW_LEFT_TARGET_MM   MIDDLE_MAZE_DISTANCE
+#define WALL_FOLLOW_RIGHT_TARGET_MM  MIDDLE_MAZE_DISTANCE
 
 #define WALL_FOLLOW_KP_ANGULAR 0.04f
 #define WALL_FOLLOW_MAX_RADPS  0.20f
@@ -81,6 +81,13 @@ static volatile enum wall_follow_side wall_follow_side = WALL_FOLLOW_NONE;
 
 static volatile float measured_heading_rad = 0.0f;
 static volatile float target_heading_rad = 0.0f;
+
+/*
+ * Se apaga durante el tramo recto previo a un giro en arco y el
+ * arco mismo: el heading objetivo ya se actualizo para despues del
+ * giro, y sin esto el lock empezaba a girar antes de tiempo.
+ */
+static volatile bool heading_lock_enabled = true;
 static volatile bool front_sensors_angle_correction_enabled = false;
 static volatile bool front_sensors_distance_correction_enabled = false;
 static volatile bool front_sensors_diagonal_correction_enabled = false;
@@ -432,6 +439,7 @@ void set_wall_follow_side(enum wall_follow_side side) {
 void reset_heading_reference(void) {
   measured_heading_rad = 0.0f;
   target_heading_rad = 0.0f;
+  heading_lock_enabled = true;
 }
 
 /*
@@ -455,6 +463,27 @@ float get_measured_heading(void) {
 
 float get_target_heading(void) {
   return target_heading_rad;
+}
+
+/*
+ * Lo que falta girar para llegar al heading objetivo, en [-PI, PI].
+ * Positivo = hay que girar a derecha.
+ */
+float get_heading_error(void) {
+  return wrap_heading_angle(target_heading_rad - measured_heading_rad);
+}
+
+/*
+ * El robot quedo alineado fisicamente con el laberinto (por ejemplo,
+ * apoyado contra una pared): el heading objetivo pasa a ser la
+ * verdad y se descarta el error acumulado del giroscopo.
+ */
+void align_measured_heading_to_target(void) {
+  measured_heading_rad = target_heading_rad;
+}
+
+void set_heading_lock_enabled(bool enabled) {
+  heading_lock_enabled = enabled;
 }
 
 void set_front_sensors_angle_correction(bool enabled) {
@@ -644,8 +673,10 @@ void control_loop(void) {
 
     if (fabsf(ideal_angular_speed) < 0.01f) {
 
-      commanded_angular_speed +=
-          get_heading_angular_correction();
+      if (heading_lock_enabled) {
+        commanded_angular_speed +=
+            get_heading_angular_correction();
+      }
 
       if (side_sensors_correction_enabled) {
         commanded_angular_speed +=

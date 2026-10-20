@@ -350,7 +350,12 @@ static void setup_main_loop_timer(void) {
   timer_set_prescaler(TIM5, ((rcc_apb1_frequency * 2) / 1000000 - 1));
   timer_disable_preload(TIM5);
   timer_continuous_mode(TIM5);
-  timer_set_period(TIM5, 996);
+  /*
+   * 1 MHz / (999 + 1) = 1 kHz exacto. Con 996 el lazo corria a
+   * ~1003 Hz y el heading (que se integra con dt = 1/CONTROL_FREQUENCY_HZ)
+   * salia 0.3 % mas grande.
+   */
+  timer_set_period(TIM5, CONTROL_TIMER_PERIOD);
 
   timer_enable_counter(TIM5);
   // El timer se iniciará en el arranque
