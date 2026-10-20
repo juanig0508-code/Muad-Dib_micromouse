@@ -50,8 +50,16 @@ enum ROBOT_VERSION {
 #define SENSING_POINT_DISTANCE 0
 
 /*
- * Valor inicial estimado.
- * Después debe ajustarse mediante pruebas.
+ * Distancia que le falta al eje para llegar al borde de celda en
+ * el momento en que se pierde una pared lateral. Fija el punto
+ * donde arrancan los giros, asi que un error de X mm deja el giro
+ * X mm descentrado.
+ *
+ * Valor inicial ESTIMADO, sin medir. Para medirlo: autoprueba 3
+ * (boton 3 del control) arrancando con la cola apoyada en la pared
+ * de atras, junto a paredes laterales que terminen en un poste.
+ * Por UART imprime "faltan X mm al borde de celda" en cada perdida
+ * de pared lateral: usar el promedio de varias pasadas.
  */
 #define WALL_LOSS_TO_SENSING_POINT_DISTANCE 162
 /** Características Físicas */
