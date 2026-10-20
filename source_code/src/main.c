@@ -310,14 +310,13 @@ static void selftest_straight_100cm(void)
 }
 
 /*
- * Mismo giro que usa handwall/floodfill al explorar (MOVE_LEFT o
- * MOVE_RIGHT), con la velocidad/ángulo/radio de la pantalla de
- * SPEED actualmente seleccionada.
+ * Mismo giro que usa handwall al explorar (MOVE_LEFT o MOVE_RIGHT),
+ * siempre con el perfil SPEED_EXPLORE.
  */
 static void selftest_explore_turn(enum movement movement)
 {
     selftest_begin();
-    configure_kinematics(menu_run_get_speed());
+    configure_kinematics(SPEED_EXPLORE);
     move(movement);
     selftest_end();
 }
