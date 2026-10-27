@@ -134,27 +134,44 @@ static struct inplace_params turns_inplace[] = {
     },
 };
 
+/*
+ * Giros de exploracion (MOVE_LEFT / MOVE_RIGHT).
+ *
+ * Solo se fija la FORMA del giro (transition, arc) y la velocidad.
+ * max_angular_speed, start y end se calculan al arrancar en
+ * setup_explore_turns() a partir de CELL_DIMENSION, para que:
+ *   - el giro sume exactamente 90°
+ *       w_max / v * (4 * transition / PI + arc) = PI / 2
+ *   - termine con el eje sobre el borde de la celda siguiente y
+ *     centrado en el pasillo nuevo (avance y desplazamiento lateral
+ *     de CELL_DIMENSION / 2 desde el punto de decision).
+ *
+ * Con 260 mm: w_max ~8.46 rad/s, start = end ~27.8 mm.
+ * (Los valores anteriores sumaban ~84.8° y terminaban ~14 mm corto.)
+ */
 static struct turn_params turns_explore[] = {
     [MOVE_LEFT] = {
-        .start = 20.37f,
-        .end = 20.36f,
         .linear_speed = 600,
-        .max_angular_speed = 8.5f,
-        .transition = 75.04f,
-        .arc = 8.89f,
+        .transition = 80.0f,
+        .arc = 9.5f,
         .sign = -1,
     },
 
     [MOVE_RIGHT] = {
-        .start = 20.37f,
-        .end = 20.36f,
         .linear_speed = 600,
-        .max_angular_speed = 8.5f,
-        .transition = 75.04f,
-        .arc = 8.89f,
+        .transition = 80.0f,
+        .arc = 9.5f,
         .sign = 1,
     },
 };
+
+/*
+ * Ajustes empiricos (mm) sobre el start / end calculados, por si en
+ * el laberinto real hace falta correr el giro. Dejar en 0 salvo que
+ * la autoprueba 4/5 muestre un error sistematico.
+ */
+#define EXPLORE_TURN_START_TRIM_MM 0.0f
+#define EXPLORE_TURN_END_TRIM_MM 0.0f
 
 static struct turn_params turns_normal[] = {
     [MOVE_LEFT_90] = {
@@ -1156,6 +1173,12 @@ static void move_side(enum movement movement) {
   disable_sensors_correction();
   reset_control_errors(); //! Esto se había puesto por un problema en la acumulación de error según aumenta el número de giros realizados
   move_arc_turn(kinematics.turns[movement]);
+  /*
+   * El integral angular acumulado durante el arco (retraso de
+   * seguimiento) seguiria empujando en el sentido del giro despues
+   * de volver a w = 0 y produciria sobregiro.
+   */
+  reset_angular_control_errors();
 
   set_front_sensors_angle_correction(false);
   set_side_sensors_correction(false);
@@ -1481,7 +1504,59 @@ char *get_movement_string(enum movement movement) {
   return movement_string[movement];
 }
 
+/**
+ * @brief Calcula w_max, start y end de un giro de exploracion a
+ * partir de su forma (transition, arc) y de CELL_DIMENSION.
+ *
+ * Integra numericamente el mismo perfil que aplica move_arc_turn()
+ * para obtener cuanto avanza el giro en la direccion de entrada
+ * (por simetria es igual al desplazamiento lateral).
+ */
+static void setup_explore_turn(struct turn_params *turn) {
+  const float step = 0.25f;
+  const float length = 2.0f * turn->transition + turn->arc;
+  const float curvature = (float)(PI / 2.0) / (4.0f * turn->transition / (float)PI + turn->arc);
+  float theta = 0.0f;
+  float advance = 0.0f;
+
+  for (float s = 0.0f; s < length; s += step) {
+    float mid = s + step / 2.0f;
+    float factor = 1.0f;
+    if (mid < turn->transition) {
+      factor = sinf(mid / turn->transition * (float)PI / 2.0f);
+    } else if (mid >= turn->transition + turn->arc) {
+      factor = sinf((mid - turn->arc) / turn->transition * (float)PI / 2.0f);
+    }
+    float dtheta = curvature * factor * step;
+    advance += cosf(theta + dtheta / 2.0f) * step;
+    theta += dtheta;
+  }
+
+  turn->max_angular_speed = curvature * turn->linear_speed;
+  turn->start = CELL_DIMENSION / 2.0f - advance + EXPLORE_TURN_START_TRIM_MM;
+  turn->end = CELL_DIMENSION / 2.0f - advance + EXPLORE_TURN_END_TRIM_MM;
+}
+
+static void setup_explore_turns(void) {
+  setup_explore_turn(&turns_explore[MOVE_LEFT]);
+  setup_explore_turn(&turns_explore[MOVE_RIGHT]);
+}
+
+/*
+ * Se llama desde main() una vez configurada la USART (setup_kinematics
+ * corre antes que el resto del setup).
+ */
+void print_explore_turns(void) {
+  struct turn_params turn = turns_explore[MOVE_RIGHT];
+  printf("Giro exploracion (CELL_DIMENSION %d): w_max %.3f rad/s, start %.2f mm, end %.2f mm\n",
+         CELL_DIMENSION, turn.max_angular_speed, turn.start, turn.end);
+  if (turn.start < 0 || turn.end < 0) {
+    printf("[MOVE] ATENCION: el giro de exploracion no entra en la celda\n");
+  }
+}
+
 void setup_kinematics(void) {
+  setup_explore_turns();
   kinematics = kinematics_settings[SPEED_EXPLORE];
 }
 
@@ -1936,6 +2011,14 @@ void move_arc_turn(struct turn_params turn) {
   float travelled;
   float angular_speed;
   float factor;
+
+  /*
+   * El avance dentro del perfil se mide en distancia, asi que la
+   * velocidad angular tiene que ser curvatura * velocidad real. Si
+   * se pidiera max_angular_speed fijo, el angulo final dependeria de
+   * la velocidad: a 550 mm/s en vez de 600 giraria ~9 % de mas.
+   */
+  float curvature = turn.max_angular_speed / turn.linear_speed;
   while (true && is_race_started() && !is_motor_saturated()) {
     set_RGB_color(255, 0, 0);
     current = get_encoder_avg_micrometers();
@@ -1943,7 +2026,11 @@ void move_arc_turn(struct turn_params turn) {
     if (travelled >= 2 * turn.transition + turn.arc) {
       break;
     }
-    angular_speed = turn.sign * turn.max_angular_speed;
+    float linear_speed = get_encoder_avg_speed();
+    if (linear_speed < 0) {
+      linear_speed = 0;
+    }
+    angular_speed = turn.sign * curvature * linear_speed;
     if (travelled < turn.transition) {
       factor = travelled / turn.transition;
       angular_speed *= sin(factor * PI / 2);

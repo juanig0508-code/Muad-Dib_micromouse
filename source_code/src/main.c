@@ -272,6 +272,8 @@ static void debug_zone(void)
  *        cola del robot apoyada en la pared de atras de una celda.
  *   4 -> giro de exploración a la izquierda (MOVE_LEFT)
  *   5 -> giro de exploración a la derecha  (MOVE_RIGHT)
+ *        Avanzan una celda antes del giro e imprimen por UART el
+ *        heading final y su error.
  */
 
 #define SELFTEST_TURN_ANGULAR_SPEED_RADPS 4.0f
@@ -375,8 +377,31 @@ static void selftest_explore_turn(enum movement movement)
 {
     selftest_begin();
     configure_kinematics(SPEED_EXPLORE);
+
+    /*
+     * Igual que en el laberinto: primero una celda a velocidad de
+     * exploracion (el giro empieza lanzado, no desde parado), y el
+     * heading objetivo se actualiza antes del giro para que el
+     * heading lock no tire de vuelta hacia 0°.
+     *
+     * Necesita ~1.5 celdas libres hacia adelante y hacia el lado
+     * del giro. Arrancar con la cola apoyada en una pared.
+     */
+    float expected_deg = (movement == MOVE_LEFT) ? -90.0f : 90.0f;
+    move(MOVE_START);
+    add_target_heading((movement == MOVE_LEFT) ? -PI / 2.0f : PI / 2.0f);
     move(movement);
+    float heading_after_turn_deg = get_measured_heading() * 180.0f / (float)PI;
+    move_straight(0, 0, false, true);
+    float heading_stopped_deg = get_measured_heading() * 180.0f / (float)PI;
+
     selftest_end();
+
+    printf("\n--- Autoprueba %s ---\n", (movement == MOVE_LEFT) ? "4 (giro izquierda)" : "5 (giro derecha)");
+    printf("Esperado: %.1f deg\n", expected_deg);
+    printf("Heading al terminar el giro (con el tramo final): %.2f deg (error %.2f)\n", heading_after_turn_deg, heading_after_turn_deg - expected_deg);
+    printf("Heading detenido: %.2f deg (error %.2f)\n", heading_stopped_deg, heading_stopped_deg - expected_deg);
+    printf("---\n");
 }
 
 static void check_selftest_buttons(void)
@@ -477,6 +502,8 @@ int main(void)
      */
 
     handle_robot_version();
+
+    print_explore_turns();
 
 
     /*

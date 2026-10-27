@@ -106,6 +106,7 @@ bool get_wall_lost_toggle_state(void);
 char *get_movement_string(enum movement movement);
 
 void setup_kinematics(void);
+void print_explore_turns(void);
 enum speed_strategy;
 void configure_kinematics(enum speed_strategy speed);
 void configure_explore_kinematics(bool is_run);
