@@ -265,7 +265,11 @@ static void debug_zone(void)
  *
  *   1 -> giro de 90°  en el lugar, con el giroscopio
  *   2 -> giro de 180° en el lugar, con el giroscopio
- *   3 -> avanza 100 cm derecho (giroscopio + encoders)
+ *   3 -> avanza 100 cm derecho (giroscopio + encoders) a velocidad
+ *        de exploracion y al final imprime por UART cada pared que
+ *        aparecio o se perdio (para medir
+ *        WALL_LOSS_TO_SENSING_POINT_DISTANCE). Arrancar con la
+ *        cola del robot apoyada en la pared de atras de una celda.
  *   4 -> giro de exploración a la izquierda (MOVE_LEFT)
  *   5 -> giro de exploración a la derecha  (MOVE_RIGHT)
  */
@@ -273,7 +277,6 @@ static void debug_zone(void)
 #define SELFTEST_TURN_ANGULAR_SPEED_RADPS 4.0f
 #define SELFTEST_TURN_ANGULAR_DECEL_RADPS2 20.0f
 #define SELFTEST_STRAIGHT_DISTANCE_MM 1000
-#define SELFTEST_STRAIGHT_SPEED_MMPS 300
 
 static void selftest_begin(void)
 {
@@ -302,11 +305,66 @@ static void selftest_turn_180(void)
     selftest_end();
 }
 
+static const char *selftest_sensor_name(uint8_t sensor)
+{
+    switch (sensor) {
+        case SENSOR_FRONT_LEFT_WALL_ID:
+            return "FL";
+        case SENSOR_FRONT_RIGHT_WALL_ID:
+            return "FR";
+        case SENSOR_SIDE_LEFT_WALL_ID:
+            return "SL";
+        case SENSOR_SIDE_RIGHT_WALL_ID:
+            return "SR";
+    }
+    return "??";
+}
+
+/*
+ * Imprime cada cambio de pared registrado durante la recta.
+ *
+ * Posicion del eje medida desde la linea central de la pared de
+ * atras: arranca en ROBOT_BACK_LENGTH + WALL_WIDTH / 2.
+ *
+ * Cuando se pierde una pared lateral, el borde de celda que la
+ * termina es el primero por delante del eje, asi que lo que le
+ * falta al eje para llegar a ese borde es el valor a usar en
+ * WALL_LOSS_TO_SENSING_POINT_DISTANCE.
+ */
+static void selftest_print_wall_events(int32_t start_micrometers)
+{
+    const float start_axle_mm = ROBOT_BACK_LENGTH + WALL_WIDTH / 2.0f;
+
+    printf("\n--- Autoprueba 3: cambios de pared (CELL_DIMENSION = %d) ---\n", CELL_DIMENSION);
+    printf("WALL_LOSS_TO_SENSING_POINT_DISTANCE actual: %d\n", WALL_LOSS_TO_SENSING_POINT_DISTANCE);
+
+    for (uint8_t i = 0; i < sensors_wall_events_count(); i++) {
+        struct wall_event event = sensors_wall_event(i);
+        float axle_mm = start_axle_mm + (event.micrometers - start_micrometers) / (float)MICROMETERS_PER_MILLIMETER;
+
+        printf("%s %s: eje a %.1f mm", selftest_sensor_name(event.sensor), event.detected ? "aparece" : "se pierde", axle_mm);
+
+        if (!event.detected && (event.sensor == SENSOR_SIDE_LEFT_WALL_ID || event.sensor == SENSOR_SIDE_RIGHT_WALL_ID)) {
+            float next_boundary_mm = ceilf(axle_mm / CELL_DIMENSION) * CELL_DIMENSION;
+            printf(" -> faltan %.1f mm al borde de celda (%.0f)", next_boundary_mm - axle_mm, next_boundary_mm);
+        }
+        printf("\n");
+    }
+    printf("---\n");
+}
+
 static void selftest_straight_100cm(void)
 {
     selftest_begin();
-    move_straight(SELFTEST_STRAIGHT_DISTANCE_MM, SELFTEST_STRAIGHT_SPEED_MMPS, false, true);
+    configure_kinematics(SPEED_EXPLORE);
+
+    int32_t start_micrometers = get_encoder_avg_micrometers();
+    sensors_wall_events_start();
+    move_straight(SELFTEST_STRAIGHT_DISTANCE_MM, get_kinematics().linear_speed, false, true);
+    sensors_wall_events_stop();
+
     selftest_end();
+    selftest_print_wall_events(start_micrometers);
 }
 
 /*

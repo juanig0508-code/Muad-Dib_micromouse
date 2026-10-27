@@ -112,6 +112,10 @@ static volatile float sensors_raw_nav[NUM_SENSORES];
 static volatile bool sensors_wall_detected[NUM_SENSORES];
 static volatile bool sensors_nav_initialized = false;
 
+static volatile struct wall_event wall_events[WALL_EVENTS_MAX];
+static volatile uint8_t wall_events_count = 0;
+static volatile bool wall_events_enabled = false;
+
 void set_sensors_robot_calibration(uint16_t version) {
   switch (version) {
     case ZOROBOT3_A:
@@ -478,15 +482,54 @@ static void update_wall_navigation(uint8_t sensor, uint16_t raw) {
   }
   sensors_raw_nav[sensor] = SENSOR_NAV_RAW_FILTER_ALPHA * raw + (1.0f - SENSOR_NAV_RAW_FILTER_ALPHA) * sensors_raw_nav[sensor];
 
-  if (sensors_wall_detected[sensor]) {
+  bool detected = sensors_wall_detected[sensor];
+  if (detected) {
     if (sensors_raw_nav[sensor] < sensors_nav_release[sensor]) {
-      sensors_wall_detected[sensor] = false;
+      detected = false;
     }
   } else {
     if (sensors_raw_nav[sensor] >= sensors_nav_detect[sensor]) {
-      sensors_wall_detected[sensor] = true;
+      detected = true;
     }
   }
+
+  if (detected != sensors_wall_detected[sensor]) {
+    sensors_wall_detected[sensor] = detected;
+    if (wall_events_enabled && wall_events_count < WALL_EVENTS_MAX) {
+      wall_events[wall_events_count].sensor = sensor;
+      wall_events[wall_events_count].detected = detected;
+      wall_events[wall_events_count].micrometers = get_encoder_avg_micrometers();
+      wall_events_count++;
+    }
+  }
+}
+
+/*
+ * Registro de cambios de pared (aparece / se pierde) con la
+ * posicion del encoder en ese instante. Sirve para medir
+ * WALL_LOSS_TO_SENSING_POINT_DISTANCE (autoprueba 3).
+ */
+void sensors_wall_events_start(void) {
+  wall_events_count = 0;
+  wall_events_enabled = true;
+}
+
+void sensors_wall_events_stop(void) {
+  wall_events_enabled = false;
+}
+
+uint8_t sensors_wall_events_count(void) {
+  return wall_events_count;
+}
+
+struct wall_event sensors_wall_event(uint8_t index) {
+  struct wall_event event = {0};
+  if (index < wall_events_count) {
+    event.sensor = wall_events[index].sensor;
+    event.detected = wall_events[index].detected;
+    event.micrometers = wall_events[index].micrometers;
+  }
+  return event;
 }
 
 /**

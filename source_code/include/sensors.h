@@ -52,6 +52,14 @@ struct walls {
   bool right;
 };
 
+/* Cambio de estado de pared de un sensor (ver sensors_wall_events_*) */
+#define WALL_EVENTS_MAX 16
+struct wall_event {
+  uint8_t sensor;
+  bool detected;
+  int32_t micrometers;
+};
+
 struct virtual_walls {
   bool front;
   bool left;
@@ -87,6 +95,11 @@ void sensors_load_eeprom(void);
 uint16_t get_sensor_raw(uint8_t pos, bool on);
 uint16_t get_sensor_raw_filter(uint8_t pos);
 uint16_t get_sensor_raw_nav(uint8_t pos);
+
+void sensors_wall_events_start(void);
+void sensors_wall_events_stop(void);
+uint8_t sensors_wall_events_count(void);
+struct wall_event sensors_wall_event(uint8_t index);
 
 bool left_wall_detection(void);
 bool right_wall_detection(void);
